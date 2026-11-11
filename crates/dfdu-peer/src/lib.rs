@@ -50,9 +50,65 @@ pub struct Status {
 }
 #[derive(Clone, Debug)]
 pub enum Event {
+    Nav(Nav),
+    NavHash(NavHash),
+    NavStatus(NavStatus),
     Status(Status),
     Error(String),
 }
+/// Navigation metadata. Paths are opaque strings, never local paths on the receiver.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Nav {
+    pub seq: u64,
+    pub path: String,
+    pub name: String,
+    pub kind: NavKind,
+    pub size: u64,
+    /// Signed Unix seconds, including times before 1970.
+    pub mtime: i64,
+    /// Parent names, nearest first.
+    pub parents: Vec<String>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum NavKind {
+    File,
+    Dir,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NavHash {
+    pub seq: u64,
+    /// Hexadecimal sampled BLAKE3 digest; interpretation belongs to the matcher.
+    pub hash: String,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Verdict {
+    Pending,
+    Match,
+    Mismatch,
+    Missing,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NavStatus {
+    pub seq: u64,
+    pub verdict: Verdict,
+}
+#[derive(Default)]
+struct Pending {
+    nav: Option<Nav>,
+    hash: Option<NavHash>,
+    status: Option<NavStatus>,
+}
+impl Pending {
+    fn nav(&mut self, nav: Nav) {
+        if self.nav.as_ref().is_none_or(|old| nav.seq > old.seq) {
+            self.hash = self.hash.take().filter(|hash| hash.seq == nav.seq);
+            self.nav = Some(nav);
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Instance {
     pub id: String,
@@ -66,6 +122,11 @@ pub struct Instance {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]
 enum Frame {
+    Nav(Nav),
+    #[serde(rename = "nav_hash")]
+    NavHash(NavHash),
+    #[serde(rename = "nav_status")]
+    NavStatus(NavStatus),
     Hello(Hello),
     Ping {},
     Bye {
@@ -90,6 +151,7 @@ pub struct Peer {
     instance: Instance,
     status: Arc<Mutex<Status>>,
     events: Receiver<Event>,
+    pending: Arc<Mutex<Pending>>,
     control: Sender<Control>,
     worker: Option<thread::JoinHandle<()>>,
     dir: PathBuf,
@@ -277,11 +339,16 @@ impl Peer {
         let shared = status.clone();
         let registration = instance.clone();
         let worker_dir = dir.clone();
-        let worker = thread::spawn(move || run(listener, rx, tx, shared, registration, worker_dir));
+        let pending = Arc::new(Mutex::new(Pending::default()));
+        let outgoing = pending.clone();
+        let worker = thread::spawn(move || {
+            run(listener, rx, tx, shared, registration, worker_dir, outgoing)
+        });
         Ok(Self {
             instance,
             status,
             events,
+            pending,
             control,
             worker: Some(worker),
             dir,
@@ -302,6 +369,49 @@ impl Peer {
         self.control
             .send(Control::Bind(target.into(), remote_bin.into()))
             .map_err(|_| error("peer stopped"))
+    }
+    /// Retain only the newest unsent selection. Sequence numbers must increase within a binding.
+    /// Only a bound master may send. Older or duplicate sequences are ignored.
+    /// A frame already being written cannot be withdrawn; receivers also check sequences.
+    pub fn send_nav(&self, nav: Nav) -> io::Result<()> {
+        self.check_role(Role::Master)?;
+        check_size(&Frame::Nav(nav.clone()))?;
+        self.pending.lock().unwrap().nav(nav);
+        Ok(())
+    }
+    /// Send the bound master's sampled hash for its current selection.
+    /// Hashes for any other sequence are discarded by the transport.
+    pub fn send_nav_hash(&self, hash: NavHash) -> io::Result<()> {
+        self.check_role(Role::Master)?;
+        check_size(&Frame::NavHash(hash.clone()))?;
+        let mut pending = self.pending.lock().unwrap();
+        if pending.hash.as_ref().is_none_or(|old| hash.seq >= old.seq) {
+            pending.hash = Some(hash);
+        }
+        Ok(())
+    }
+    /// Send the bound slave's verdict for the current received selection.
+    /// Status for any other sequence is discarded. Pending verdicts coalesce.
+    pub fn send_nav_status(&self, status: NavStatus) -> io::Result<()> {
+        self.check_role(Role::Slave)?;
+        let mut pending = self.pending.lock().unwrap();
+        if pending
+            .status
+            .as_ref()
+            .is_none_or(|old| status.seq >= old.seq)
+        {
+            pending.status = Some(status);
+        }
+        Ok(())
+    }
+    fn check_role(&self, role: Role) -> io::Result<()> {
+        if self.status().role == role {
+            Ok(())
+        } else {
+            Err(error(
+                "navigation requires a bound peer with the correct role",
+            ))
+        }
     }
     pub fn unbind(&self) {
         let _ = self.control.send(Control::Unbind);
@@ -458,6 +568,13 @@ fn connect(dir: &Path, target: &str, bin: &str) -> io::Result<(UnixStream, Optio
     Ok((stream, Some(transport)))
 }
 
+fn check_size(frame: &Frame) -> io::Result<()> {
+    if serde_json::to_vec(frame).map_err(io::Error::other)?.len() + 1 > LIMIT {
+        Err(error("peer frame exceeds 64 KiB"))
+    } else {
+        Ok(())
+    }
+}
 struct Link {
     stream: UnixStream,
     _child: Option<Transport>,
@@ -467,6 +584,10 @@ struct Link {
     ping: Instant,
     role: Role,
     ready: bool,
+    sent_seq: Option<u64>,
+    received_seq: Option<u64>,
+    incoming: Pending,
+    outgoing: Pending,
 }
 impl Drop for Link {
     fn drop(&mut self) {
@@ -490,6 +611,10 @@ impl Link {
             ping: Instant::now(),
             role,
             ready: false,
+            sent_seq: None,
+            received_seq: None,
+            incoming: Pending::default(),
+            outgoing: Pending::default(),
         };
         link.stream.set_nonblocking(true)?;
         link.queue(Frame::Hello(Hello {
@@ -555,6 +680,22 @@ impl Link {
                                 self.ready = true;
                                 peer = Some(format!("{host}/{id}"));
                             }
+                            Frame::Nav(nav) if self.ready && self.role == Role::Slave => {
+                                if self.received_seq.is_none_or(|seq| nav.seq > seq) {
+                                    self.received_seq = Some(nav.seq);
+                                    self.incoming.nav(nav);
+                                }
+                            }
+                            Frame::NavHash(hash) if self.ready && self.role == Role::Slave => {
+                                if self.received_seq == Some(hash.seq) {
+                                    self.incoming.hash = Some(hash);
+                                }
+                            }
+                            Frame::NavStatus(status) if self.ready && self.role == Role::Master => {
+                                if self.sent_seq == Some(status.seq) {
+                                    self.incoming.status = Some(status);
+                                }
+                            }
                             Frame::Ping {} if self.ready => {}
                             Frame::Bye { reason } => {
                                 return Err(error(
@@ -616,6 +757,7 @@ fn run(
     status: Arc<Mutex<Status>>,
     mut instance: Instance,
     dir: PathBuf,
+    pending: Arc<Mutex<Pending>>,
 ) {
     let _responder = discovery::responder(dir.clone(), instance.id.clone());
     let registration = Registration {
@@ -693,8 +835,48 @@ fn run(
                 Err(_) => break,
             }
         }
+        let queued = std::mem::take(&mut *pending.lock().unwrap());
         if let Some(active) = &mut link {
-            match active.poll() {
+            if active.ready {
+                if active.role == Role::Master {
+                    if let Some(nav) = queued.nav
+                        && active.sent_seq.is_none_or(|seq| nav.seq > seq)
+                    {
+                        active.sent_seq = Some(nav.seq);
+                        active.outgoing.nav(nav);
+                    }
+                    if let Some(hash) = queued.hash
+                        && active.sent_seq == Some(hash.seq)
+                    {
+                        active.outgoing.hash = Some(hash);
+                    }
+                } else if let Some(status) = queued.status
+                    && active.received_seq == Some(status.seq)
+                {
+                    active.outgoing.status = Some(status);
+                }
+                // Do not append selections behind a blocked stream. Keep one latest slot.
+                if active.output.is_empty() {
+                    if let Some(nav) = active.outgoing.nav.take() {
+                        active.queue(Frame::Nav(nav));
+                    } else if let Some(hash) = active.outgoing.hash.take() {
+                        active.queue(Frame::NavHash(hash));
+                    } else if let Some(status) = active.outgoing.status.take() {
+                        active.queue(Frame::NavStatus(status));
+                    }
+                }
+            }
+            let result = active.poll();
+            if let Some(nav) = active.incoming.nav.take() {
+                let _ = tx.send(Event::Nav(nav));
+            }
+            if let Some(hash) = active.incoming.hash.take() {
+                let _ = tx.send(Event::NavHash(hash));
+            }
+            if let Some(status) = active.incoming.status.take() {
+                let _ = tx.send(Event::NavStatus(status));
+            }
+            match result {
                 Ok(Some(id)) => publish(
                     &status,
                     &tx,

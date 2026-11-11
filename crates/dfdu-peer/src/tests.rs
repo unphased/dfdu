@@ -91,6 +91,7 @@ fn panic_cleanup_does_not_wait_for_worker_or_bridge_acknowledgment() {
             instance,
             dir,
             status: Arc::new(Mutex::new(Status::default())),
+            pending: Arc::new(Mutex::new(Pending::default())),
             events,
             control,
             worker: None,
@@ -360,8 +361,15 @@ fn target_parsing_rejects_shell_and_option_injection() {
 }
 
 fn nav(seq: u64) -> Nav {
-    Nav { seq, path: "/source/a".into(), name: "a".into(), kind: NavKind::File,
-        size: 42, mtime: -1, parents: vec!["source".into()] }
+    Nav {
+        seq,
+        path: "/source/a".into(),
+        name: "a".into(),
+        kind: NavKind::File,
+        size: 42,
+        mtime: -1,
+        parents: vec!["source".into()],
+    }
 }
 #[test]
 fn navigation_wire_and_direction() {
@@ -370,8 +378,17 @@ fn navigation_wire_and_direction() {
     assert!(encoded.contains("\"kind\":\"file\""));
     assert!(wire(format!("{encoded}\n").as_bytes(), true).is_ok());
     assert!(wire(format!("{encoded}\n").as_bytes(), false).is_err());
-    let status = Frame::NavStatus(NavStatus { seq: 7, verdict: Verdict::Match });
-    assert!(wire(format!("{}\n", serde_json::to_string(&status).unwrap()).as_bytes(), true).is_err());
+    let status = Frame::NavStatus(NavStatus {
+        seq: 7,
+        verdict: Verdict::Match,
+    });
+    assert!(
+        wire(
+            format!("{}\n", serde_json::to_string(&status).unwrap()).as_bytes(),
+            true
+        )
+        .is_err()
+    );
 }
 #[test]
 fn local_navigation_latest_sequence_and_status() {
@@ -386,25 +403,127 @@ fn local_navigation_latest_sequence_and_status() {
         thread::sleep(Duration::from_millis(5));
     }
     assert!(slave.send_nav(nav(1)).is_err());
-    assert!(master.send_nav_status(NavStatus { seq: 1, verdict: Verdict::Match }).is_err());
+    assert!(
+        master
+            .send_nav_status(NavStatus {
+                seq: 1,
+                verdict: Verdict::Match
+            })
+            .is_err()
+    );
     master.send_nav(nav(2)).unwrap();
     master.send_nav(nav(1)).unwrap();
-    master.send_nav_hash(NavHash { seq: 2, hash: "abcd".into() }).unwrap();
+    master
+        .send_nav_hash(NavHash {
+            seq: 2,
+            hash: "abcd".into(),
+        })
+        .unwrap();
     loop {
         if let Event::Nav(value) = slave.events().recv_timeout(Duration::from_secs(3)).unwrap() {
-            assert_eq!(value.seq, 2); break;
+            assert_eq!(value.seq, 2);
+            break;
         }
     }
     loop {
-        if let Event::NavHash(value) = slave.events().recv_timeout(Duration::from_secs(3)).unwrap() {
-            assert_eq!(value.seq, 2); break;
+        if let Event::NavHash(value) = slave.events().recv_timeout(Duration::from_secs(3)).unwrap()
+        {
+            assert_eq!(value.seq, 2);
+            break;
         }
     }
-    slave.send_nav_status(NavStatus { seq: 2, verdict: Verdict::Match }).unwrap();
+    slave
+        .send_nav_status(NavStatus {
+            seq: 2,
+            verdict: Verdict::Match,
+        })
+        .unwrap();
     loop {
-        if let Event::NavStatus(value) = master.events().recv_timeout(Duration::from_secs(3)).unwrap() {
-            assert_eq!(value.verdict, Verdict::Match); break;
+        if let Event::NavStatus(value) = master
+            .events()
+            .recv_timeout(Duration::from_secs(3))
+            .unwrap()
+        {
+            assert_eq!(value.verdict, Verdict::Match);
+            break;
         }
     }
-    drop(master); drop(slave); fs::remove_dir_all(dir).unwrap();
+    drop(master);
+    drop(slave);
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn navigation_receive_coalesces_and_discards_stale_work() {
+    let (a, mut b) = UnixStream::pair().unwrap();
+    let mut link = Link::new(a, None, Role::Slave, "local", "host").unwrap();
+    link.ready = true;
+    for frame in [
+        Frame::Nav(nav(1)),
+        Frame::NavHash(NavHash {
+            seq: 1,
+            hash: "old".into(),
+        }),
+        Frame::Nav(nav(3)),
+        Frame::Nav(nav(2)),
+        Frame::NavHash(NavHash {
+            seq: 1,
+            hash: "stale".into(),
+        }),
+        Frame::NavHash(NavHash {
+            seq: 3,
+            hash: "current".into(),
+        }),
+    ] {
+        writeln!(b, "{}", serde_json::to_string(&frame).unwrap()).unwrap();
+    }
+    link.poll().unwrap();
+    assert_eq!(link.incoming.nav.take().unwrap().seq, 3);
+    assert_eq!(link.incoming.hash.take().unwrap().hash, "current");
+    let (a, mut b) = UnixStream::pair().unwrap();
+    let mut link = Link::new(a, None, Role::Master, "local", "host").unwrap();
+    link.ready = true;
+    link.sent_seq = Some(3);
+    for seq in [1, 3, 2] {
+        writeln!(
+            b,
+            "{}",
+            serde_json::to_string(&Frame::NavStatus(NavStatus {
+                seq,
+                verdict: Verdict::Match
+            }))
+            .unwrap()
+        )
+        .unwrap();
+    }
+    link.poll().unwrap();
+    assert_eq!(link.incoming.status.take().unwrap().seq, 3);
+}
+#[test]
+fn navigation_mailbox_is_latest_only_and_rejects_oversized_frames() {
+    let mut pending = Pending::default();
+    for seq in 0..1000 {
+        pending.nav(nav(seq));
+    }
+    pending.nav(nav(3));
+    assert_eq!(pending.nav.unwrap().seq, 999);
+    let mut huge = nav(1);
+    huge.path = "x".repeat(LIMIT);
+    assert!(check_size(&Frame::Nav(huge)).is_err());
+    assert_eq!(
+        serde_json::to_string(&Frame::NavHash(NavHash {
+            seq: 1,
+            hash: "abc".into()
+        }))
+        .unwrap(),
+        "{\"nav_hash\":{\"seq\":1,\"hash\":\"abc\"}}"
+    );
+    assert_eq!(
+        serde_json::to_string(&Frame::NavStatus(NavStatus {
+            seq: 1,
+            verdict: Verdict::Missing
+        }))
+        .unwrap(),
+        "{\"nav_status\":{\"seq\":1,\"verdict\":\"missing\"}}"
+    );
 }
