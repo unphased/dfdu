@@ -867,7 +867,7 @@ _dfdu() {
             return 0
             ;;
         dfdu__subcmd__peers)
-            opts="-h --json --help"
+            opts="-h --discover --json --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0

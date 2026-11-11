@@ -57,6 +57,7 @@ upload\:"One sent earlier, else send one, without asking"))' \
         case $line[2] in
             (peers)
 _arguments "${_arguments_options[@]}" : \
+'--discover[Discover hosts over LAN and tailnet UDP]' \
 '--json[Print instance metadata as JSON]' \
 '-h[Print help]' \
 '--help[Print help]' \

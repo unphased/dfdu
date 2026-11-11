@@ -4,10 +4,13 @@
 .SH NAME
 dfdu\-peers \- List live peer\-mode instances on this host, removing stale entries
 .SH SYNOPSIS
-\fBdfdu peers\fR [\fB\-\-json\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+\fBdfdu peers\fR [\fB\-\-discover\fR] [\fB\-\-json\fR] [\fB\-h\fR|\fB\-\-help\fR] 
 .SH DESCRIPTION
 List live peer\-mode instances on this host, removing stale entries
 .SH OPTIONS
+.TP
+\fB\-\-discover\fR
+Discover hosts over LAN and tailnet UDP
 .TP
 \fB\-\-json\fR
 Print instance metadata as JSON

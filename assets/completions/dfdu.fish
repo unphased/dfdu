@@ -68,6 +68,7 @@ complete -c dfdu -n "__fish_dfdu_needs_command" -a "update" -d 'Check for a newe
 complete -c dfdu -n "__fish_dfdu_needs_command" -a "completions" -d 'Print a shell completion script (bash, zsh, fish, elvish, powershell)'
 complete -c dfdu -n "__fish_dfdu_needs_command" -a "agent" -d 'Scan for a dfdu on another host (`--remote`): reads requests on stdin and writes what it finds to stdout in dfdu\'s wire format. Not for use by hand'
 complete -c dfdu -n "__fish_dfdu_needs_command" -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c dfdu -n "__fish_dfdu_using_subcommand peers" -l discover -d 'Discover hosts over LAN and tailnet UDP'
 complete -c dfdu -n "__fish_dfdu_using_subcommand peers" -l json -d 'Print instance metadata as JSON'
 complete -c dfdu -n "__fish_dfdu_using_subcommand peers" -s h -l help -d 'Print help'
 complete -c dfdu -n "__fish_dfdu_using_subcommand peer-attach" -s h -l help -d 'Print help'

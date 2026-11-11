@@ -66,6 +66,7 @@ set edit:completion:arg-completer[dfdu] = {|@words|
             cand help 'Print this message or the help of the given subcommand(s)'
         }
         &'dfdu;peers'= {
+            cand --discover 'Discover hosts over LAN and tailnet UDP'
             cand --json 'Print instance metadata as JSON'
             cand -h 'Print help'
             cand --help 'Print help'

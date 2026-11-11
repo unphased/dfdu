@@ -70,6 +70,7 @@ Register-ArgumentCompleter -Native -CommandName 'dfdu' -ScriptBlock {
             break
         }
         'dfdu;peers' {
+            [CompletionResult]::new('--discover', '--discover', [CompletionResultType]::ParameterName, 'Discover hosts over LAN and tailnet UDP')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Print instance metadata as JSON')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')

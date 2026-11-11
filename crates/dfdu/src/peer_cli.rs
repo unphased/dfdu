@@ -8,7 +8,18 @@ fn failure(error: impl std::fmt::Display) -> ExitCode {
 }
 
 #[cfg(unix)]
-pub fn list(json: bool) -> Result<ExitCode, ExitCode> {
+pub fn list(json: bool, discover: bool) -> Result<ExitCode, ExitCode> {
+    if discover {
+        let hosts = dfdu_peer::discover().map_err(failure)?;
+        if json {
+            println!("{}", serde_json::to_string(&hosts).map_err(failure)?);
+        } else {
+            for host in hosts {
+                println!("{}\t{}\t{}", host.host, host.user, host.ids.join(", "));
+            }
+        }
+        return Ok(ExitCode::SUCCESS);
+    }
     let peers = dfdu_peer::list().map_err(failure)?;
     if json {
         println!("{}", serde_json::to_string(&peers).map_err(failure)?);
@@ -38,7 +49,7 @@ pub fn attach(id: &str) -> Result<ExitCode, ExitCode> {
 }
 
 #[cfg(not(unix))]
-pub fn list(_: bool) -> Result<ExitCode, ExitCode> {
+pub fn list(_: bool, _: bool) -> Result<ExitCode, ExitCode> {
     Err(failure("peer mode requires Unix"))
 }
 

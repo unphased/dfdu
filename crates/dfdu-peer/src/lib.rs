@@ -1,7 +1,9 @@
 //! Local instance registration and authenticated SSH/stdin peer transport.
 #![cfg(unix)]
+mod discovery;
 #[cfg(test)]
 mod tests;
+pub use discovery::{Beacon, DISCOVERY_PORT, discover, discover_for, remote_peers};
 
 use crossbeam_channel::{Receiver, Sender, unbounded};
 use serde::{Deserialize, Serialize};
@@ -615,6 +617,7 @@ fn run(
     mut instance: Instance,
     dir: PathBuf,
 ) {
+    let _responder = discovery::responder(dir.clone(), instance.id.clone());
     let registration = Registration {
         dir: dir.clone(),
         id: instance.id.clone(),

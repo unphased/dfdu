@@ -177,6 +177,9 @@ struct Cli {
 enum Cmd {
     /// List live peer-mode instances on this host, removing stale entries.
     Peers {
+        /// Discover hosts over LAN and tailnet UDP.
+        #[arg(long)]
+        discover: bool,
         /// Print instance metadata as JSON.
         #[arg(long)]
         json: bool,
@@ -429,7 +432,7 @@ fn run(cli: Cli) -> Result<ExitCode, ExitCode> {
     }
     let rules = || RuleArgs::default().load().ok_or(ExitCode::from(1));
     match cli.cmd {
-        Some(Cmd::Peers { json }) => peer_cli::list(json),
+        Some(Cmd::Peers { json, discover }) => peer_cli::list(json, discover),
         Some(Cmd::PeerAttach { id }) => peer_cli::attach(&id),
         Some(Cmd::Scan(args)) => scan::run(args),
         Some(Cmd::Disks) => disks::run(),
