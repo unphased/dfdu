@@ -1588,6 +1588,7 @@ dependencies = [
  "insta",
  "proptest",
  "ratatui",
+ "serde_json",
  "tachyonfx",
  "tempfile",
  "terminal-colorsaurus",

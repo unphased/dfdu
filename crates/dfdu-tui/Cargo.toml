@@ -21,6 +21,7 @@ dfdu-store.workspace = true
 dfdu-dupes.workspace = true
 dfdu-session.workspace = true
 crossbeam-channel.workspace = true
+serde_json.workspace = true
 ratatui.workspace = true
 unicode-width.workspace = true
 tachyonfx.workspace = true

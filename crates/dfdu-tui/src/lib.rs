@@ -28,6 +28,8 @@ mod input;
 mod model;
 #[cfg(test)]
 mod on_select_tests;
+#[cfg(test)]
+mod peer_tests;
 mod overlay;
 mod reopen;
 mod run_loop;
