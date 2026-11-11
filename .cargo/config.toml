@@ -1,2 +1,7 @@
 [alias]
 xtask = "run --quiet --package xtask --"
+
+# Fork: small, fast dev and test builds. For real debugging, opt in with
+# CARGO_PROFILE_DEV_DEBUG=true (full debug info).
+[profile.dev]
+debug = "line-tables-only"
