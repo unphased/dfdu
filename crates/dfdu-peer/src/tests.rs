@@ -358,3 +358,53 @@ fn target_parsing_rejects_shell_and_option_injection() {
     }
     assert_eq!(quote("a'b"), "'a'\\''b'");
 }
+
+fn nav(seq: u64) -> Nav {
+    Nav { seq, path: "/source/a".into(), name: "a".into(), kind: NavKind::File,
+        size: 42, mtime: -1, parents: vec!["source".into()] }
+}
+#[test]
+fn navigation_wire_and_direction() {
+    let encoded = serde_json::to_string(&Frame::Nav(nav(7))).unwrap();
+    assert!(encoded.starts_with("{\"nav\":{\"seq\":7,"));
+    assert!(encoded.contains("\"kind\":\"file\""));
+    assert!(wire(format!("{encoded}\n").as_bytes(), true).is_ok());
+    assert!(wire(format!("{encoded}\n").as_bytes(), false).is_err());
+    let status = Frame::NavStatus(NavStatus { seq: 7, verdict: Verdict::Match });
+    assert!(wire(format!("{}\n", serde_json::to_string(&status).unwrap()).as_bytes(), true).is_err());
+}
+#[test]
+fn local_navigation_latest_sequence_and_status() {
+    let dir = dir();
+    let master = Peer::start_in(dir.clone(), vec![]).unwrap();
+    let slave = Peer::start_in(dir.clone(), vec![]).unwrap();
+    assert!(master.send_nav(nav(1)).is_err());
+    master.bind(slave.id(), DEFAULT_REMOTE_BIN).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while master.status().role != Role::Master || slave.status().role != Role::Slave {
+        assert!(Instant::now() < deadline);
+        thread::sleep(Duration::from_millis(5));
+    }
+    assert!(slave.send_nav(nav(1)).is_err());
+    assert!(master.send_nav_status(NavStatus { seq: 1, verdict: Verdict::Match }).is_err());
+    master.send_nav(nav(2)).unwrap();
+    master.send_nav(nav(1)).unwrap();
+    master.send_nav_hash(NavHash { seq: 2, hash: "abcd".into() }).unwrap();
+    loop {
+        if let Event::Nav(value) = slave.events().recv_timeout(Duration::from_secs(3)).unwrap() {
+            assert_eq!(value.seq, 2); break;
+        }
+    }
+    loop {
+        if let Event::NavHash(value) = slave.events().recv_timeout(Duration::from_secs(3)).unwrap() {
+            assert_eq!(value.seq, 2); break;
+        }
+    }
+    slave.send_nav_status(NavStatus { seq: 2, verdict: Verdict::Match }).unwrap();
+    loop {
+        if let Event::NavStatus(value) = master.events().recv_timeout(Duration::from_secs(3)).unwrap() {
+            assert_eq!(value.verdict, Verdict::Match); break;
+        }
+    }
+    drop(master); drop(slave); fs::remove_dir_all(dir).unwrap();
+}
