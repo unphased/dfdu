@@ -130,9 +130,10 @@ pub fn count(m: &Model, s: &SessionState) -> Option<(u64, usize)> {
     }
     Some((
         version,
-        match m.tree.roots().next() {
-            Some(r) => dfdu_dupes::count_candidates(&m.tree, r, min_size()),
-            None => 0,
+        match (m.tree.roots().next(), m.tree.roots().nth(1)) {
+            (Some(r), None) => dfdu_dupes::count_candidates(&m.tree, r, min_size()),
+            (None, _) => 0,
+            _ => crate::effect::duplicate_candidates(&m.tree).len(),
         },
     ))
 }

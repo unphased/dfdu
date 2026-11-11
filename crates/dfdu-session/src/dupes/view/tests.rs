@@ -261,6 +261,38 @@ fn the_files_to_compare_are_counted_once() {
     assert!(matches!(then.effects[..], [Effect::FindDupes]));
 }
 
+#[test]
+fn multi_root_count_matches_candidates_across_overlapping_roots() {
+    use dfdu_engine::test_support::meta;
+    use dfdu_tree::Kind;
+
+    let (mut fx, root) = Fixture::new();
+    let size = 2 * min_size();
+    let sub = fx.dir(root, "sub");
+    fx.file(sub, "a", size);
+    let other = fx.m.tree.new_root(b"/other", &meta(Kind::Dir, 0, 50), true);
+    fx.file(other, "b", size);
+    fx.file(other, "unique", size + 1);
+    let overlap = fx.m.tree.new_root(b"/r/sub", &meta(Kind::Dir, 0, 51), true);
+    fx.file(overlap, "a", size);
+    let mut s = SessionState::new(Instant::now());
+    s.view = View::Duplicates;
+    s.outside.local = true;
+    assert_eq!(count(&fx.m, &s).map(|(_, n)| n), Some(2));
+    let candidates = crate::effect::duplicate_candidates(&fx.m.tree);
+    assert_eq!(candidates.len(), 2);
+    assert!(
+        candidates
+            .iter()
+            .any(|c| c.path == fx.m.tree.path_buf(sub).join("a"))
+    );
+    assert!(
+        candidates
+            .iter()
+            .any(|c| c.path == fx.m.tree.path_buf(other).join("b"))
+    );
+}
+
 /// A browser of the Duplicates view comparing, with its comparison's cancel flag.
 fn comparing() -> (SessionState, Arc<std::sync::atomic::AtomicBool>) {
     let mut s = SessionState::new(Instant::now());
