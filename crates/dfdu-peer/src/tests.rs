@@ -77,6 +77,65 @@ fn exact_wire_envelopes() {
     );
 }
 #[test]
+fn panic_cleanup_does_not_wait_for_worker_or_bridge_acknowledgment() {
+    if std::env::var_os("DFDU_PEER_PANIC_CHILD").is_some() {
+        let real = Peer::start_in(dir(), Vec::new()).unwrap();
+        let instance = real.instance.clone();
+        let dir = real.dir.clone();
+        drop(real);
+        // An unserviced control channel models both the panicking worker itself
+        // and a bridge that the worker must join before it can acknowledge Stop.
+        let (control, commands) = unbounded();
+        let (_, events) = unbounded();
+        let peer = Peer {
+            instance,
+            dir,
+            status: Arc::new(Mutex::new(Status::default())),
+            events,
+            control,
+            worker: None,
+        };
+        let cleanup = peer.cleanup_hook();
+        std::panic::set_hook(Box::new(move |_| cleanup()));
+        for name in ["peer-worker", "peer-bridge"] {
+            assert!(
+                thread::Builder::new()
+                    .name(name.into())
+                    .spawn(|| panic!("injected transport panic"))
+                    .unwrap()
+                    .join()
+                    .is_err()
+            );
+            assert!(matches!(commands.try_recv(), Ok(Control::Stop(_))));
+        }
+        return;
+    }
+    let mut child = Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "tests::panic_cleanup_does_not_wait_for_worker_or_bridge_acknowledgment",
+        ])
+        .env("DFDU_PEER_PANIC_CHILD", "1")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            assert!(status.success());
+            break;
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("panic cleanup waited for a worker or bridge acknowledgment");
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+}
+
+#[test]
 fn cleanup_hook_and_panic_unlink_registrations() {
     let dir = dir();
     let peer = Peer::start_in(dir.clone(), vec![]).unwrap();
