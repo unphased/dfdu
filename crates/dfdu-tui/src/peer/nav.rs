@@ -183,6 +183,121 @@ mod tests {
         session.shutdown(Duration::ZERO);
     }
     #[test]
+    fn master_selection_clears_verified_footer_without_remote_status() {
+        master_refresh(false);
+    }
+
+    #[test]
+    fn master_rescan_refreshes_same_selected_file() {
+        master_refresh(true);
+    }
+
+    fn master_refresh(rescan: bool) {
+        use std::time::{Duration, Instant};
+        let tmp = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(tmp.path()).unwrap();
+        let first = root.join("first");
+        let second = root.join("second");
+        std::fs::write(&first, b"original").unwrap();
+        std::fs::write(&second, b"other").unwrap();
+        let engine = dfdu_engine::Engine::start(
+            dfdu_scan::PortableBackend::default(),
+            dfdu_engine::EngineOptions::default(),
+        );
+        let scan = || {
+            engine.send(dfdu_engine::Command::Scan {
+                path: root.as_path().into(),
+                opts: dfdu_scan::JobOptions::default(),
+            });
+            assert!(engine.wait_idle(Some(Duration::from_secs(5))).is_idle());
+        };
+        scan();
+        let master = std::sync::Arc::new(dfdu_peer::Peer::start(Vec::new()).unwrap());
+        let slave = dfdu_peer::Peer::start(Vec::new()).unwrap();
+        master
+            .bind(slave.id(), dfdu_peer::DEFAULT_REMOTE_BIN)
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while slave.status().role != dfdu_peer::Role::Slave
+            || master.status().role != dfdu_peer::Role::Master
+        {
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        let mut ui = crate::UiOptions::from_env();
+        ui.local = true;
+        ui.peer = Some(crate::PeerOptions {
+            peer: master,
+            remote_bin: String::new(),
+        });
+        let app = crate::app::App::with_options(&ui, Instant::now());
+        let mut session = dfdu_session::Session::over(&engine, app, Default::default());
+        let _ = session
+            .tick(Instant::now() + Duration::from_secs(1))
+            .unwrap();
+        jump(&mut session, &first.display().to_string());
+        let _ = session
+            .tick(Instant::now() + Duration::from_secs(1))
+            .unwrap();
+        session.front_mut().session.select(0);
+        let mut runtime = Runtime::new();
+        runtime.tick(&mut session);
+        let initial_seq = session.front().nav.seq;
+        assert!(initial_seq > 0);
+        assert!(local_files(session.front()));
+        let old = runtime
+            .workers
+            .results
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap();
+        let old_hash = old.2.clone();
+        runtime.complete(session.front_mut(), old);
+        // The previous sequence was verified. The slave deliberately sends no new status.
+        session.front_mut().nav.footer = "✓ 1 first".into();
+        if rescan {
+            std::fs::write(&first, b"changed source bytes").unwrap();
+            scan();
+            let _ = session
+                .tick(Instant::now() + Duration::from_secs(1))
+                .unwrap();
+        } else {
+            session.front_mut().session.select(1);
+        }
+        runtime.tick(&mut session);
+        assert_eq!(session.front().nav.seq, initial_seq + 1);
+        assert!(!session.front().nav.footer.contains('✓'));
+        let fresh = runtime
+            .workers
+            .results
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap();
+        assert_ne!(fresh.2, old_hash);
+        runtime.complete(session.front_mut(), fresh);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut nav = None;
+        let mut hash_seq = None;
+        while nav.is_none() || hash_seq.is_none() {
+            assert!(Instant::now() < deadline);
+            match slave.events().recv_timeout(Duration::from_secs(1)).unwrap() {
+                dfdu_peer::Event::Nav(n) if n.seq == initial_seq + 1 => nav = Some(n),
+                dfdu_peer::Event::NavHash(h) if h.seq == initial_seq + 1 => hash_seq = Some(h.seq),
+                _ => {}
+            }
+        }
+        let nav = nav.unwrap();
+        let expected = if rescan { &first } else { &second };
+        assert_eq!(nav.path, expected.display().to_string());
+        assert_eq!(nav.size, std::fs::metadata(expected).unwrap().len());
+        runtime.tick(&mut session);
+        assert_eq!(
+            session.front().nav.seq,
+            initial_seq + 1,
+            "unchanged ticks must not resend"
+        );
+        session.shutdown(Duration::ZERO);
+    }
+
+    #[test]
     fn stale_hash_cannot_change_candidates() {
         let mut state = State {
             seq: 2,
