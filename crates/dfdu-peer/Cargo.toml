@@ -8,8 +8,12 @@ license.workspace = true
 [lints]
 workspace = true
 
+[[test]]
+name = "attach"
+harness = false
+
 [dependencies]
 crossbeam-channel.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-rustix.workspace = true
+rustix = { workspace = true, features = ["system"] }

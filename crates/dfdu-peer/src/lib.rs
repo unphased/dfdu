@@ -1,5 +1,7 @@
 //! Local instance registration and authenticated SSH/stdin peer transport.
 #![cfg(unix)]
+#[cfg(test)]
+mod tests;
 
 use crossbeam_channel::{Receiver, Sender, unbounded};
 use serde::{Deserialize, Serialize};
@@ -94,13 +96,20 @@ fn socket(dir: &Path, id: &str) -> io::Result<PathBuf> {
     Ok(path)
 }
 fn metadata(dir: &Path, instance: &Instance) -> io::Result<()> {
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(dir.join(format!("{}.json", instance.id)))?;
-    serde_json::to_writer(&mut file, instance).map_err(io::Error::other)
+    let temporary = dir.join(format!("{}.tmp", instance.id));
+    let result = (|| {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&temporary)?;
+        serde_json::to_writer(&mut file, instance).map_err(io::Error::other)?;
+        fs::rename(&temporary, dir.join(format!("{}.json", instance.id)))
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(temporary);
+    }
+    result
 }
 impl Peer {
     pub fn start(roots: Vec<PathBuf>) -> io::Result<Self> {
@@ -123,9 +132,10 @@ impl Peer {
                     .as_nanos(),
                 NEXT.fetch_add(1, Ordering::Relaxed)
             ),
-            host: std::env::var("HOSTNAME")
-                .or_else(|_| std::env::var("HOST"))
-                .unwrap_or_else(|_| "localhost".into()),
+            host: rustix::system::uname()
+                .nodename()
+                .to_string_lossy()
+                .into_owned(),
             pid: std::process::id(),
             roots,
             started: SystemTime::now()
@@ -222,9 +232,10 @@ fn list_in(dir: &Path) -> io::Result<Vec<Instance>> {
         let Ok(path) = socket(dir, &instance.id) else {
             continue;
         };
-        let dead = rustix::process::Pid::from_raw(instance.pid as i32).is_none_or(|pid| {
-            rustix::process::test_kill_process(pid) == Err(rustix::io::Errno::SRCH)
-        });
+        let dead = instance.pid > i32::MAX as u32
+            || rustix::process::Pid::from_raw(instance.pid as i32).is_none_or(|pid| {
+                rustix::process::test_kill_process(pid) == Err(rustix::io::Errno::SRCH)
+            });
         if dead && UnixStream::connect(&path).is_err() {
             let _ = fs::remove_file(path);
             let _ = fs::remove_file(entry.path());
@@ -412,9 +423,9 @@ fn publish(
     dir: &Path,
     value: Status,
 ) {
-    *status.lock().unwrap() = value.clone();
     instance.role = value.role;
     let _ = metadata(dir, instance);
+    *status.lock().unwrap() = value.clone();
     let _ = tx.send(Event::Status(value));
 }
 fn run(

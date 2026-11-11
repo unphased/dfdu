@@ -31,7 +31,20 @@ fn pair_bind_refuse_unbind_and_cleanup() {
     a.unbind();
     wait(&a, Role::Unbound);
     wait(&b, Role::Unbound);
+    b.bind(a.id(), "unused").unwrap();
+    wait(&b, Role::Master);
+    wait(&a, Role::Slave);
+    assert_eq!(
+        dfdu_peer::list()
+            .unwrap()
+            .iter()
+            .find(|p| p.id == b.id())
+            .unwrap()
+            .role,
+        Role::Master
+    );
     let id = a.id().to_owned();
     drop(a);
+    wait(&b, Role::Unbound);
     assert!(!dfdu_peer::list().unwrap().iter().any(|p| p.id == id));
 }
