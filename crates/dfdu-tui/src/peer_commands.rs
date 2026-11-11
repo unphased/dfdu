@@ -21,6 +21,7 @@ pub(crate) struct PeerState {
     index: MatchIndex,
     query: Option<Query>,
     current: Option<HostPath>,
+    cycled: bool,
     pending: Option<isize>,
     pub(crate) yank: bool,
     retry: Option<Retry>,
@@ -87,8 +88,10 @@ pub(crate) fn retry<B: dfdu_scan::Backend>(session: &mut Session<'_, B, App>) ->
     if retry.version == new_version {
         return false;
     }
-    // Re-rank from the best candidate, rather than retaining a partial-scan match.
-    session.front_mut().peer.current = None;
+    // Re-rank partial-scan matches unless the user explicitly cycled.
+    if !session.front().peer.cycled {
+        session.front_mut().peer.current = None;
+    }
     cycle(session, 0);
     true
 }
@@ -159,6 +162,9 @@ fn cycle<B: dfdu_scan::Backend>(session: &mut Session<'_, B, App>, direction: is
     };
     let (path, root) = matches[at].clone();
     peer.current = Some(path.clone());
+    if direction != 0 {
+        peer.cycled = true;
+    }
     let app = session.front_mut();
     show(app, path.clone(), root);
     app.session.status = Some(format!("{}/{} matches", at + 1, matches.len()));
@@ -208,6 +214,7 @@ pub(crate) fn command<B: dfdu_scan::Backend>(
                 parents,
             });
             peer.current = None;
+            peer.cycled = false;
             peer.retry = None;
             cycle(session, 0)
         }
@@ -338,6 +345,78 @@ mod tests {
             dfdu_session::selected_path::selected(&session.front().session).map(|(p, _)| p),
             Some(path)
         );
+        drop(session);
+        engine.shutdown(Duration::from_millis(200));
+    }
+
+    #[test]
+    fn retry_preserves_explicit_next_and_prev_across_tree_versions() {
+        use dfdu_engine::test_support::meta;
+        use dfdu_tree::Kind;
+
+        let make_tree = || {
+            let mut tree = Tree::new();
+            let root = tree.new_root(b"/r", &meta(Kind::Dir, 0, 1), true);
+            for (i, name) in [b"a".as_slice(), b"b", b"c"].iter().enumerate() {
+                let dir = tree.add_dir(root, name, &meta(Kind::Dir, 0, i as u64 + 2));
+                tree.add_file(
+                    dir,
+                    b"file",
+                    &meta(Kind::File, 3, i as u64 + 10),
+                    true,
+                    None,
+                );
+            }
+            tree
+        };
+        let engine = Engine::start(PortableBackend::default(), EngineOptions::default());
+        engine.load(make_tree());
+        let now = Instant::now();
+        let mut session = Session::over(
+            &engine,
+            App::new(Theme::no_color(), now),
+            SessionOptions::default(),
+        );
+        for (action, keyboard) in [("next", false), ("prev", false), ("next", true)] {
+            let first = command(
+                &mut session,
+                json!({"match":{"size":3,"name":"file","parents":["a"]}}),
+            );
+            let selected = if keyboard {
+                cycle_key(session.front_mut(), 1);
+                assert!(pending(&mut session));
+                target(session.front()).unwrap()
+            } else {
+                command(&mut session, json!({(action):null}))["path"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned()
+            };
+            assert_ne!(selected, first["path"].as_str().unwrap());
+            // Simulate retries armed by a scan before each new tree version.
+            for _ in 0..2 {
+                let version = engine.read(|m| m.tree.version()).wrapping_sub(1);
+                session.front_mut().peer.retry = Some(Retry { version });
+                assert!(retry(&mut session));
+                assert_eq!(target(session.front()).as_deref(), Some(selected.as_str()));
+            }
+        }
+        // A new match query returns to automatic best-candidate selection.
+        let first = command(
+            &mut session,
+            json!({"match":{"size":3,"name":"file","parents":["a"]}}),
+        );
+        command(&mut session, json!({"next":null}));
+        let other = session.front().peer.current.clone();
+        command(
+            &mut session,
+            json!({"match":{"size":3,"name":"file","parents":["a"]}}),
+        );
+        session.front_mut().peer.current = other;
+        let version = engine.read(|m| m.tree.version()).wrapping_sub(1);
+        session.front_mut().peer.retry = Some(Retry { version });
+        assert!(retry(&mut session));
+        assert_eq!(target(session.front()).as_deref(), first["path"].as_str());
         drop(session);
         engine.shutdown(Duration::from_millis(200));
     }

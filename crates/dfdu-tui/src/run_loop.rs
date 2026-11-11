@@ -216,16 +216,19 @@ where
             peer_move = true;
             peer_target = crate::peer_commands::target(session.front());
             input_dirty = true;
+            // The retry navigated after this tick. Read the destination before sleeping
+            // or observing the selection.
+            continue;
         }
         let state = &session.front().session;
         let selected = dfdu_session::selected_path::selected(state).map(|(path, _)| path);
         let changed = selected != previous_peer_selection;
         let suppress = peer_move || peer_target.is_some();
-        if peer_target.as_ref().is_some_and(|target| {
-            selected
-                .as_ref()
-                .is_some_and(|path| path.display() == target.as_str())
-        }) {
+        if let Some(target) = &peer_target
+            && session
+                .engine()
+                .read(|m| peer_target_done(&m.tree, target, selected.as_ref()))
+        {
             peer_target = None;
         }
         let yank = std::mem::take(&mut session.front_mut().peer.yank);
@@ -343,6 +346,14 @@ where
     }
 }
 
+// Keep suppression through the tick that reaches or loses the destination.
+fn peer_target_done(tree: &dfdu_tree::Tree, target: &str, selected: Option<&HostPath>) -> bool {
+    selected.is_some_and(|path| path.display() == target) || {
+        let path = HostPath::new(tree.host(), target.as_bytes().to_vec());
+        dfdu_tree::find_path(tree, &path).is_none()
+    }
+}
+
 type Cursor = (
     dfdu_tree::HostPath,
     Option<Vec<u8>>,
@@ -390,6 +401,21 @@ mod cursor_tests {
     use crate::tests::{press, snap_with_totals};
     use crate::theme::Theme;
     use ratatui::crossterm::event::{KeyCode, KeyModifiers, MouseEvent, MouseEventKind};
+
+    #[test]
+    fn peer_target_guard_ends_when_reached_or_missing() {
+        use dfdu_engine::test_support::meta;
+        use dfdu_tree::{Kind, Tree};
+
+        let mut tree = Tree::new();
+        let root = tree.new_root(b"/r", &meta(Kind::Dir, 0, 1), true);
+        let file = tree.add_file(root, b"file", &meta(Kind::File, 3, 2), true, None);
+        let path = tree.host_path(file);
+        let target = path.display();
+        assert!(!peer_target_done(&tree, &target, None));
+        assert!(peer_target_done(&tree, &target, Some(&path)));
+        assert!(peer_target_done(&Tree::new(), &target, None));
+    }
 
     #[test]
     fn only_actual_user_cursor_moves_are_detected() {

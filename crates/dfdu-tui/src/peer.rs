@@ -2,7 +2,7 @@
 use std::io::{self, BufRead, BufReader, Read, Write};
 #[cfg(test)]
 use std::net::SocketAddr;
-use std::net::{TcpListener, TcpStream};
+use std::net::{TcpListener, TcpStream, ToSocketAddrs};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -162,13 +162,7 @@ impl Outgoing {
                 let result = loop {
                     let result = (|| -> io::Result<Value> {
                         if connection.is_none() {
-                            use std::net::ToSocketAddrs;
-                            let addr = addr
-                                .to_socket_addrs()?
-                                .next()
-                                .ok_or_else(|| io::Error::other("invalid peer address"))?;
-                            let mut stream =
-                                TcpStream::connect_timeout(&addr, Duration::from_secs(2))?;
+                            let mut stream = connect(&addr)?;
                             stream.set_read_timeout(Some(Duration::from_secs(2)))?;
                             stream.set_write_timeout(Some(Duration::from_secs(2)))?;
                             if let Some(key) = &key {
@@ -179,14 +173,23 @@ impl Outgoing {
                         }
                         let (stream, reader) = connection.as_mut().unwrap();
                         send(stream, &query)?;
-                        let mut line = String::new();
-                        if reader.read_line(&mut line)? == 0 {
+                        let mut line = Vec::new();
+                        let n = (&mut *reader)
+                            .take(1_048_577)
+                            .read_until(b'\n', &mut line)?;
+                        if n == 0 {
                             return Err(io::Error::new(
                                 io::ErrorKind::UnexpectedEof,
                                 "peer closed connection",
                             ));
                         }
-                        serde_json::from_str(&line).map_err(io::Error::other)
+                        if n > 1_048_576 || !line.ends_with(b"\n") {
+                            return Err(io::Error::new(
+                                io::ErrorKind::InvalidData,
+                                "invalid peer reply",
+                            ));
+                        }
+                        serde_json::from_slice(&line).map_err(io::Error::other)
                     })();
                     if retry
                         && result.as_ref().is_err_and(|error| {
@@ -220,7 +223,69 @@ impl Outgoing {
     }
 }
 
+fn connect(addr: impl ToSocketAddrs) -> io::Result<TcpStream> {
+    let mut last_error = None;
+    for addr in addr.to_socket_addrs()? {
+        match TcpStream::connect_timeout(&addr, Duration::from_secs(2)) {
+            Ok(stream) => return Ok(stream),
+            Err(error) => last_error = Some(error),
+        }
+    }
+    Err(last_error.unwrap_or_else(|| io::Error::other("invalid peer address")))
+}
+
 fn send(stream: &mut TcpStream, value: &Value) -> io::Result<()> {
     serde_json::to_writer(&mut *stream, value)?;
     stream.write_all(b"\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn connect_tries_later_addresses() {
+        let unavailable = TcpListener::bind("127.0.0.1:0").unwrap();
+        let unavailable_addr = unavailable.local_addr().unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let available_addr = listener.local_addr().unwrap();
+        drop(unavailable);
+        let stream = connect(&[unavailable_addr, available_addr][..]).unwrap();
+        assert_eq!(stream.peer_addr().unwrap(), available_addr);
+    }
+
+    fn reply_status(reply: Vec<u8>) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = String::new();
+            BufReader::new(stream.try_clone().unwrap())
+                .read_line(&mut request)
+                .unwrap();
+            stream.write_all(&reply).unwrap();
+        });
+        let outgoing = Outgoing::start(addr.to_string(), None);
+        outgoing.queries.send(json!({"test": true})).unwrap();
+        let status = outgoing
+            .replies
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap();
+        server.join().unwrap();
+        status
+    }
+
+    #[test]
+    fn outgoing_accepts_complete_reply() {
+        assert_eq!(
+            reply_status(b"{\"ok\":true}\n".to_vec()),
+            "peer: {\"ok\":true}"
+        );
+    }
+
+    #[test]
+    fn outgoing_rejects_oversized_and_unterminated_replies() {
+        assert!(reply_status(vec![b'x'; 1_048_577]).contains("invalid peer reply"));
+        assert!(reply_status(b"{\"ok\":true}".to_vec()).contains("invalid peer reply"));
+    }
 }
