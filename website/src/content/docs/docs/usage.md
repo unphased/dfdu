@@ -28,7 +28,7 @@ Keys follow ncdu. Press `?` in the app for the full list.
 | `o` `y` | Open in file manager, copy path | `D` | Delete permanently |
 | `r` | Rescan | `q` | Quit |
 | `Ctrl-G` | Go to a folder | `?` | All keys |
-| `[` `]` | Previous, next peer match | | |
+| `[` `]` | Previous, next peer match | `Y` | Send selected file to peer |
 
 Unreadable entries are marked `!` with the reason. Press `!` to list them all.
 
@@ -38,9 +38,26 @@ Set `DFDU_ON_SELECT` to a shell command to run it when the selected local path c
 DFDU_ON_SELECT='printf "%s\n" "$1" >> /tmp/dfdu-selected' dfdu
 ```
 
-## Peer listener
+## Peers
 
-Set `DFDU_LISTEN` to a TCP address to accept line-delimited JSON commands while browsing. It binds the address requested, so use a loopback address unless remote access is intended. The connection is not encrypted. Set `DFDU_PEER_KEY` to require a shared key; without it, anyone who can connect can send commands.
+Two browsers can match files across scans over TCP. Start a listener in one browser and point the other at it:
+
+```sh
+DFDU_LISTEN=127.0.0.1:9876 DFDU_PEER_KEY=secret dfdu ~/Downloads
+DFDU_PEER=127.0.0.1:9876 DFDU_PEER_KEY=secret dfdu ~/other
+```
+
+In the second browser, select a file and press `Y` to send it to the listener. This is separate from `y`, which copies the path. The listener selects the best match; use `[` and `]` there to cycle through matches. The in-app help lists these keys.
+
+Set `DFDU_PEER_FOLLOW=1` on the sending browser to send automatically when its selection changes, including the initial selection. Directories are not sent. A selection moved by an incoming peer command is not immediately echoed back. Configure `DFDU_LISTEN` and `DFDU_PEER` on both browsers if both should send and receive; use different listen addresses.
+
+The sender connects on demand and reuses the connection. Its status line shows the reply or a connection error. A later send reconnects after an error; the failed send is not retried. Pending sends may be coalesced to the latest selection.
+
+Each send is a `match` command containing the file's raw size, name and up to 16 ancestor names, nearest first. Names are converted to UTF-8 with replacement for invalid text. It does not send the full path or file contents.
+
+### Listener protocol
+
+Set `DFDU_LISTEN` to a TCP address to accept line-delimited JSON commands while browsing. It binds the address requested, so use a loopback address unless remote access is intended. The connection is not encrypted, including the key. Set `DFDU_PEER_KEY` to require a shared key; without it, anyone who can connect can send commands. The same variable supplies the key when connecting to `DFDU_PEER`, so it must match the listener's key.
 
 ```sh
 DFDU_LISTEN=127.0.0.1:9876 DFDU_PEER_KEY=secret dfdu ~

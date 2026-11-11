@@ -36,7 +36,7 @@ fn help_lists_every_action() {
     let mut app = app_with_help(t0);
     // One column on a tall screen: everything fits, and each action shows its keys before
     // its label.
-    let frame = render(&mut app, t0, 76, 100);
+    let frame = render(&mut app, t0, 76, 110);
     assert!(!frame.contains("↓ more"), "{frame}");
     let rows = inside(&frame);
     for info in ACTIONS {
@@ -58,6 +58,20 @@ fn help_lists_every_action() {
     for note in NOTES {
         assert!(squeezed.contains(note), "{note}\n{frame}");
     }
+}
+
+#[test]
+fn yank_is_listed_and_runs_from_the_registry() {
+    let t0 = Instant::now();
+    let mut app = app_with_help(t0);
+    let frame = render(&mut app, t0, 76, 100);
+    assert!(
+        frame.contains("find the selected file on the peer"),
+        "{frame}"
+    );
+    app.key(press(KeyCode::Esc), t0);
+    app.key(press(KeyCode::Char('Y')), t0);
+    assert!(app.peer.yank);
 }
 
 #[test]

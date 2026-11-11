@@ -194,6 +194,16 @@ where
     } else {
         None
     };
+    let outgoing = std::env::var("DFDU_PEER")
+        .ok()
+        .map(|addr| crate::peer::Outgoing::start(addr, std::env::var("DFDU_PEER_KEY").ok()));
+    let peer_replies = outgoing
+        .as_ref()
+        .map_or_else(crossbeam_channel::never, |p| p.replies.clone());
+    let follow = std::env::var("DFDU_PEER_FOLLOW").as_deref() == Ok("1");
+    let mut previous_peer_selection = None;
+    let mut peer_move = false;
+    let mut peer_target: Option<String> = None;
     let peer_requests = listener
         .as_ref()
         .map_or_else(crossbeam_channel::never, |listener| {
@@ -202,11 +212,50 @@ where
     loop {
         let now = Instant::now();
         let tick = session.tick(now)?;
+        if crate::peer_commands::retry(session) {
+            peer_move = true;
+            peer_target = crate::peer_commands::target(session.front());
+            input_dirty = true;
+        }
         let state = &session.front().session;
-        on_select.update(
-            state.outside.local,
-            dfdu_session::selected_path::selected(state).map(|(path, _)| path),
-        );
+        let selected = dfdu_session::selected_path::selected(state).map(|(path, _)| path);
+        let changed = selected != previous_peer_selection;
+        let suppress = peer_move || peer_target.is_some();
+        if peer_target.as_ref().is_some_and(|target| {
+            selected
+                .as_ref()
+                .is_some_and(|path| path.display() == target.as_str())
+        }) {
+            peer_target = None;
+        }
+        let yank = std::mem::take(&mut session.front_mut().peer.yank);
+        if (yank || (follow && changed && !suppress))
+            && let Some(outgoing) = &outgoing
+        {
+            let payload = selected.as_ref().and_then(|path| {
+                session
+                    .engine()
+                    .read(|m| crate::peer_commands::payload(&m.tree, path))
+            });
+            if let Some(payload) = payload {
+                if outgoing.queries.try_send(payload).is_err() {
+                    session.front_mut().session.status = Some("peer: sender busy".into());
+                }
+            } else if yank {
+                session.front_mut().session.status = Some("peer: select a file".into());
+            }
+        } else if yank && outgoing.is_none() {
+            session.front_mut().session.status = Some("peer: DFDU_PEER not set".into());
+        }
+        previous_peer_selection = selected;
+        peer_move = false;
+        let state = &session.front().session;
+        let selected = dfdu_session::selected_path::selected(state).map(|(path, _)| path);
+        if suppress {
+            on_select.observe(state.outside.local, selected);
+        } else {
+            on_select.update(state.outside.local, selected);
+        }
         // What the scanned host answered the go-to prompt, which the tick took in.
         let answered = goto::poll(session.front_mut());
         let motion_due = (session.front().motion.next_frame_at()).is_some_and(|t| now >= t);
@@ -243,9 +292,11 @@ where
             recv(input) -> ev => match ev {
                 Ok(Event::Key(k)) => {
                     assert!(!inject_panic, "injected UI panic");
+                    peer_target = None;
+                    crate::peer_commands::cancel_retry(session.front_mut());
                     let fx = session.front_mut().key(k, Instant::now());
                     handle_effects(session, fx);
-                    crate::peer_commands::pending(session);
+                    if crate::peer_commands::pending(session) { peer_move = true; }
                     if let Some(text) = goto::submitted(session.front_mut()) {
                         let gone = session.go_to_path(&text);
                         let fx = goto::gone_to(session.front_mut(), gone);
@@ -254,6 +305,8 @@ where
                     input_dirty = true;
                 }
                 Ok(Event::Mouse(m)) if mouse_on => {
+                    peer_target = None;
+                    crate::peer_commands::cancel_retry(session.front_mut());
                     if let Some(fx) = mouse::event(session.front_mut(), m, Instant::now()) {
                         handle_effects(session, fx);
                         input_dirty = true;
@@ -265,8 +318,17 @@ where
                 Err(_) => return Ok(None),
             },
             recv(peer_requests) -> request => if let Ok(request) = request {
+                let moves = request.command.get("match").is_some() || request.command.get("next").is_some() || request.command.get("prev").is_some() || request.command.get("goto").is_some();
                 let reply = crate::peer_commands::command(session, request.command);
+                if moves && let Some(path) = reply.get("path").and_then(|p| p.as_str()) {
+                    peer_move = true;
+                    peer_target = Some(path.to_owned());
+                }
                 let _ = request.reply.send(reply);
+                input_dirty = true;
+            },
+            recv(peer_replies) -> reply => if let Ok(reply) = reply {
+                session.front_mut().session.status = Some(reply);
                 input_dirty = true;
             },
             recv(changes) -> _ => session.note_change(),

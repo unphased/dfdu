@@ -60,6 +60,7 @@ pub fn run(s: &mut SessionState, a: Action, now: Instant) -> Ran {
         | Action::Types
         | Action::FocusDetails
         | Action::CopyPath
+        | Action::YankPeer
         | Action::GoTo
         | Action::PrevMatch
         | Action::NextMatch => return Ran::FrontEnd,

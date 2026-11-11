@@ -6,7 +6,7 @@ use ratatui::crossterm::event::{KeyEvent, KeyModifiers};
 use super::*;
 use crate::app::App;
 
-const ALL: [Action; 64] = [
+const ALL: [Action; 65] = [
     Action::Quit,
     Action::Up,
     Action::Down,
@@ -47,6 +47,7 @@ const ALL: [Action; 64] = [
     Action::MarkPattern,
     Action::InvertMarks,
     Action::CopyPath,
+    Action::YankPeer,
     Action::OpenPath,
     Action::Filter,
     Action::Types,

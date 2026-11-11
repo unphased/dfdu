@@ -3,15 +3,15 @@ source: crates/dfdu-tui/src/overlay/palette.rs
 expression: frame
 ---
  dfdu │ 1 Files │ 2 Map │ 3 Cleanup │ 4 Duplicates │ 5 Largest                     ⠋ scanning 00:00
- /r         ┌ Commands 68/68 ──────────────────────────────────────────────────────────┐ze ↓ · disk
+ /r         ┌ Commands 69/69 ──────────────────────────────────────────────────────────┐ze ↓ · disk
         size│ : ▌                                                                      │
-     3.0 GiB│ tick what Cleanup or Duplicates suggests deleting                 act  A │
-   625.0 MiB│ duplicates: compare the files again                               act  R │
-            │ cleanup: the item's own cleanup command (dry run first)           act  N │
+     3.0 GiB│ duplicates: compare the files again                               act  R │
+   625.0 MiB│ cleanup: the item's own cleanup command (dry run first)           act  N │
             │ mark a range: moving marks every row passed (v or Esc ends)       act  v │
             │ mark by pattern: names in this directory matching a glob             act │
             │ invert the marks in this directory, as * does in the marks pane      act │
             │ copy the selected path (through the terminal, OSC 52)             act  y │
+            │ find the selected file on the peer                                act  Y │
             │ open in the file manager (a file: its folder)                     act  o │
             │ move to Trash                                                     act  d │
             │ delete permanently (type delete)                                  act  D │

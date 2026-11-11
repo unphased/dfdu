@@ -27,8 +27,8 @@ expression: frame
   ┃ s  sort by size (again: reverse)                       palette)                              ┃
   ┃ n  sort by name (again: reverse)                y      copy the selected path (through the   ┃
   ┃ C  sort by items (again: reverse)                      terminal, OSC 52)                     ┃
-  ┃ M  sort by modification time (again:            o      open in the file manager (a file: its ┃
-  ┃    reverse)                                            folder)                               ┃
-  ┃ S  re-sort now                                  d      move to Trash                         ┃
+  ┃ M  sort by modification time (again:            Y      find the selected file on the peer    ┃
+  ┃    reverse)                                     o      open in the file manager (a file: its ┃
+  ┃ S  re-sort now                                         folder)                               ┃
   ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ↓ more ┛
  ↑↓ scroll  PgUp PgDn page  / search  Esc close

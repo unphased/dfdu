@@ -1,5 +1,5 @@
 use std::io::{BufRead, BufReader, Write};
-use std::net::TcpStream;
+use std::net::{TcpListener, TcpStream};
 use std::time::Duration;
 
 use serde_json::{Value, json};
@@ -101,4 +101,57 @@ fn bad_authentication_is_rejected_without_dispatch() {
 fn binds_non_loopback_address() {
     let listener = Listener::bind("0.0.0.0:0", None).unwrap();
     assert!(listener.addr().ip().is_unspecified());
+}
+
+#[test]
+fn outgoing_reconnects_and_resends_after_peer_closes_idle_connection() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let outgoing = crate::peer::Outgoing::start(
+        listener.local_addr().unwrap().to_string(),
+        Some("secret".into()),
+    );
+    let server = std::thread::spawn(move || {
+        for size in [1, 2] {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            assert_eq!(response(&mut reader), json!({"key":"secret"}));
+            assert_eq!(response(&mut reader), json!({"match":{"size":size}}));
+            writeln!(stream, "{}", json!({"ok":true,"size":size})).unwrap();
+        }
+    });
+    for size in [1, 2] {
+        outgoing
+            .queries
+            .send(json!({"match":{"size":size}}))
+            .unwrap();
+        assert_eq!(
+            outgoing
+                .replies
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap(),
+            format!("peer: {}", json!({"ok":true,"size":size}))
+        );
+    }
+    server.join().unwrap();
+}
+
+#[test]
+fn outgoing_authenticates_and_reuses_connection() {
+    let listener = Listener::bind("127.0.0.1:0", Some("secret".into())).unwrap();
+    let outgoing = crate::peer::Outgoing::start(listener.addr().to_string(), Some("secret".into()));
+    for size in [1, 2] {
+        let query = json!({"match":{"size":size,"name":"file","parents":[]}});
+        outgoing.queries.send(query.clone()).unwrap();
+        dispatch(&listener, query, json!({"ok":true,"matches":size}));
+        assert!(
+            outgoing
+                .replies
+                .recv_timeout(Duration::from_secs(2))
+                .unwrap()
+                .contains("\"ok\":true")
+        );
+    }
 }

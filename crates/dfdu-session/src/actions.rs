@@ -44,6 +44,7 @@ pub enum Action {
     MarkPattern,
     InvertMarks,
     CopyPath,
+    YankPeer,
     OpenPath,
     Filter,
     Types,
@@ -365,6 +366,12 @@ pub const ACTIONS: &[ActionInfo] = &[
         Action::CopyPath,
         "y",
         "copy the selected path (through the terminal, OSC 52)",
+        Group::Act,
+    ),
+    row(
+        Action::YankPeer,
+        "Y",
+        "find the selected file on the peer",
         Group::Act,
     ),
     row(

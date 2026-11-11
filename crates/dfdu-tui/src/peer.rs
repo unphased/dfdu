@@ -141,6 +141,85 @@ fn serve(mut stream: TcpStream, key: Option<&str>, requests: &Sender<Request>) {
     }
 }
 
+/// A single worker owns the connection, keeping network waits off the UI thread.
+pub(crate) struct Outgoing {
+    pub queries: Sender<Value>,
+    pub replies: Receiver<String>,
+}
+
+impl Outgoing {
+    pub fn start(addr: String, key: Option<String>) -> Self {
+        let (queries, incoming) = unbounded::<Value>();
+        let (outgoing, replies) = unbounded();
+        std::thread::spawn(move || {
+            let mut connection: Option<(TcpStream, BufReader<TcpStream>)> = None;
+            while let Ok(mut query) = incoming.recv() {
+                while let Ok(newer) = incoming.try_recv() {
+                    query = newer;
+                }
+                let reused = connection.is_some();
+                let mut retry = reused;
+                let result = loop {
+                    let result = (|| -> io::Result<Value> {
+                        if connection.is_none() {
+                            use std::net::ToSocketAddrs;
+                            let addr = addr
+                                .to_socket_addrs()?
+                                .next()
+                                .ok_or_else(|| io::Error::other("invalid peer address"))?;
+                            let mut stream =
+                                TcpStream::connect_timeout(&addr, Duration::from_secs(2))?;
+                            stream.set_read_timeout(Some(Duration::from_secs(2)))?;
+                            stream.set_write_timeout(Some(Duration::from_secs(2)))?;
+                            if let Some(key) = &key {
+                                send(&mut stream, &json!({"key":key}))?;
+                            }
+                            let reader = BufReader::new(stream.try_clone()?);
+                            connection = Some((stream, reader));
+                        }
+                        let (stream, reader) = connection.as_mut().unwrap();
+                        send(stream, &query)?;
+                        let mut line = String::new();
+                        if reader.read_line(&mut line)? == 0 {
+                            return Err(io::Error::new(
+                                io::ErrorKind::UnexpectedEof,
+                                "peer closed connection",
+                            ));
+                        }
+                        serde_json::from_str(&line).map_err(io::Error::other)
+                    })();
+                    if retry
+                        && result.as_ref().is_err_and(|error| {
+                            matches!(
+                                error.kind(),
+                                io::ErrorKind::UnexpectedEof
+                                    | io::ErrorKind::BrokenPipe
+                                    | io::ErrorKind::ConnectionReset
+                                    | io::ErrorKind::ConnectionAborted
+                                    | io::ErrorKind::NotConnected
+                            )
+                        })
+                    {
+                        connection = None;
+                        retry = false;
+                    } else {
+                        break result;
+                    }
+                };
+                let status = match result {
+                    Ok(reply) => format!("peer: {reply}"),
+                    Err(e) => {
+                        connection = None;
+                        format!("peer: {e}")
+                    }
+                };
+                let _ = outgoing.send(status);
+            }
+        });
+        Self { queries, replies }
+    }
+}
+
 fn send(stream: &mut TcpStream, value: &Value) -> io::Result<()> {
     serde_json::to_writer(&mut *stream, value)?;
     stream.write_all(b"\n")

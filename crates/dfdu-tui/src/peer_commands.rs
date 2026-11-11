@@ -22,16 +22,86 @@ pub(crate) struct PeerState {
     query: Option<Query>,
     current: Option<HostPath>,
     pending: Option<isize>,
+    pub(crate) yank: bool,
+    retry: Option<Retry>,
+}
+
+#[derive(Clone)]
+struct Retry {
+    version: u64,
+    cursor: Option<HostPath>,
+    deferred: Option<HostPath>,
+}
+
+/// Cancel automatic rematching when the user navigates, even if the cursor did not move.
+pub(crate) fn cancel_retry(app: &mut App) {
+    app.peer.retry = None;
+}
+
+pub(crate) fn target(app: &App) -> Option<String> {
+    app.peer
+        .current
+        .as_ref()
+        .map(|path| path.display().to_string())
 }
 
 pub(crate) fn cycle_key(app: &mut App, direction: isize) {
     app.peer.pending = Some(direction);
 }
 
-pub(crate) fn pending<B: dfdu_scan::Backend>(session: &mut Session<'_, B, App>) {
+pub(crate) fn pending<B: dfdu_scan::Backend>(session: &mut Session<'_, B, App>) -> bool {
     if let Some(direction) = session.front_mut().peer.pending.take() {
-        let _ = cycle(session, direction);
+        return cycle(session, direction).get("path").is_some();
     }
+    false
+}
+
+pub(crate) fn payload(tree: &Tree, path: &HostPath) -> Option<Value> {
+    let ix = dfdu_tree::find_path(tree, path)?;
+    if tree.kind(ix) != dfdu_tree::Kind::File {
+        return None;
+    }
+    let mut parents = Vec::new();
+    let mut parent = tree.parent(ix);
+    while let Some(p) = parent {
+        if parents.len() == 16 {
+            break;
+        }
+        parent = tree.parent(p);
+        if parent.is_none() {
+            if let Some(name) = tree.host_path(p).file_name() {
+                parents.push(String::from_utf8_lossy(name).into_owned());
+            }
+        } else {
+            parents.push(String::from_utf8_lossy(tree.name(p)).into_owned());
+        }
+    }
+    Some(
+        json!({"match":{"size":tree.raw_size(ix).0,"name":String::from_utf8_lossy(tree.name(ix)),"parents":parents}}),
+    )
+}
+
+pub(crate) fn retry<B: dfdu_scan::Backend>(session: &mut Session<'_, B, App>) -> bool {
+    let Some(mut retry) = session.front().peer.retry.clone() else {
+        return false;
+    };
+    let current = dfdu_session::selected_path::selected(&session.front().session).map(|(p, _)| p);
+    if retry.deferred.is_some() && current == retry.deferred {
+        retry.cursor = current.clone();
+        retry.deferred = None;
+        session.front_mut().peer.retry = Some(retry.clone());
+    } else if current != retry.cursor {
+        session.front_mut().peer.retry = None;
+        return false;
+    }
+    let new_version = session.engine().read(|m| m.tree.version());
+    if retry.version == new_version {
+        return false;
+    }
+    // Re-rank from the best candidate, rather than retaining a partial-scan match.
+    session.front_mut().peer.current = None;
+    cycle(session, 0);
+    true
 }
 
 fn candidates(tree: &Tree, index: &mut MatchIndex, q: &Query) -> Vec<(HostPath, HostPath)> {
@@ -76,9 +146,19 @@ fn cycle<B: dfdu_scan::Backend>(session: &mut Session<'_, B, App>, direction: is
         session.front_mut().peer = peer;
         return json!({"ok":false,"error":"no matches"});
     };
-    let matches = session
-        .engine()
-        .read(|m| candidates(&m.tree, &mut peer.index, query));
+    let (matches, version, scanning) = session.engine().read(|m| {
+        (
+            candidates(&m.tree, &mut peer.index, query),
+            m.tree.version(),
+            m.status.scanning(),
+        )
+    });
+    let cursor = dfdu_session::selected_path::selected(&session.front().session).map(|(p, _)| p);
+    peer.retry = (matches.is_empty() || scanning).then_some(Retry {
+        version,
+        cursor,
+        deferred: None,
+    });
     if matches.is_empty() {
         peer.current = None;
         session.front_mut().session.status = Some(format!("no match for {}", query.name));
@@ -95,6 +175,9 @@ fn cycle<B: dfdu_scan::Backend>(session: &mut Session<'_, B, App>, direction: is
     };
     let (path, root) = matches[at].clone();
     peer.current = Some(path.clone());
+    if let Some(retry) = &mut peer.retry {
+        retry.deferred = Some(path.clone());
+    }
     let app = session.front_mut();
     show(app, path.clone(), root);
     app.session.status = Some(format!("{}/{} matches", at + 1, matches.len()));
@@ -144,6 +227,7 @@ pub(crate) fn command<B: dfdu_scan::Backend>(
                 parents,
             });
             peer.current = None;
+            peer.retry = None;
             cycle(session, 0)
         }
         "next" => cycle(session, 1),
@@ -171,6 +255,7 @@ pub(crate) fn command<B: dfdu_scan::Backend>(
                 return json!({"ok":false,"error":"cannot select root"});
             }
             let app = session.front_mut();
+            cancel_retry(app);
             show(app, path.clone(), root);
             json!({"ok":true,"path":path.display().to_string()})
         }
@@ -204,6 +289,71 @@ mod tests {
     use dfdu_scan::{JobOptions, PortableBackend};
     use dfdu_session::SessionOptions;
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn outgoing_payload_is_file_only_and_limits_parents() {
+        use dfdu_engine::test_support::meta;
+        use dfdu_tree::Kind;
+        let mut tree = Tree::new();
+        let root = tree.new_root(b"/r", &meta(Kind::Dir, 0, 1), true);
+        let mut dir = root;
+        for i in 0..20 {
+            dir = tree.add_dir(dir, format!("d{i}").as_bytes(), &meta(Kind::Dir, 0, i + 2));
+        }
+        let file = tree.add_file(dir, b"file", &meta(Kind::File, 42, 99), true, None);
+        assert_eq!(payload(&tree, &tree.host_path(dir)), None);
+        let result = payload(&tree, &tree.host_path(file)).unwrap();
+        assert_eq!(result["match"]["size"], 42);
+        assert_eq!(result["match"]["name"], "file");
+        assert_eq!(result["match"]["parents"].as_array().unwrap().len(), 16);
+        assert_eq!(result["match"]["parents"][0], "d19");
+    }
+
+    #[test]
+    fn outgoing_payload_uses_scan_root_basename() {
+        use dfdu_engine::test_support::meta;
+        use dfdu_tree::Kind;
+        let mut tree = Tree::new();
+        let root = tree.new_root(b"/some/scan-root", &meta(Kind::Dir, 0, 1), true);
+        let file = tree.add_file(root, b"file", &meta(Kind::File, 42, 2), true, None);
+        assert_eq!(
+            payload(&tree, &tree.host_path(file)).unwrap()["match"]["parents"],
+            json!(["scan-root"])
+        );
+    }
+
+    #[test]
+    fn retries_a_missing_match_when_the_tree_changes() {
+        use dfdu_engine::test_support::meta;
+        use dfdu_tree::Kind;
+
+        let engine = Engine::start(PortableBackend::default(), EngineOptions::default());
+        let now = Instant::now();
+        let mut session = Session::over(
+            &engine,
+            App::new(Theme::no_color(), now),
+            SessionOptions::default(),
+        );
+        assert_eq!(
+            command(&mut session, json!({"match":{"size":3,"name":"file"}}))["matches"],
+            0
+        );
+        assert!(!retry(&mut session));
+        let mut tree = Tree::new();
+        let root = tree.new_root(b"/r", &meta(Kind::Dir, 0, 1), true);
+        let file = tree.add_file(root, b"file", &meta(Kind::File, 3, 2), true, None);
+        let path = tree.host_path(file);
+        engine.load(tree);
+        assert!(retry(&mut session));
+        assert_eq!(session.front().peer.current.as_ref(), Some(&path));
+        let _ = session.tick(now).unwrap();
+        assert_eq!(
+            dfdu_session::selected_path::selected(&session.front().session).map(|(p, _)| p),
+            Some(path)
+        );
+        drop(session);
+        engine.shutdown(Duration::from_millis(200));
+    }
 
     #[test]
     fn goto_selects_in_current_directory_through_filters() {
