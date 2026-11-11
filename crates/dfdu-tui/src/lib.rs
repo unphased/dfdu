@@ -31,6 +31,8 @@ pub mod preview;
 mod reopen;
 mod run_loop;
 mod setup;
+#[cfg(unix)]
+mod peer;
 mod state;
 mod theme;
 mod view;
