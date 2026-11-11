@@ -26,7 +26,12 @@ pub fn run(cli: Cli) -> Result<ExitCode, ExitCode> {
         read_only: cli.read_only,
         ..EngineOptions::from_env()
     };
-    let path = cli.path.unwrap_or_else(|| PathBuf::from("."));
+    let mut paths = cli.paths;
+    if paths.is_empty() {
+        paths.push(PathBuf::from("."));
+    }
+    let multi = paths.len() > 1;
+    let path = paths[0].clone();
     let mut reopen = None;
     let source = if let Some(f) = &cli.import {
         Source::Imported(read_export(f)?.tree)
@@ -50,6 +55,29 @@ pub fn run(cli: Cli) -> Result<ExitCode, ExitCode> {
             job,
             local: false,
             elevated: false,
+        }
+    } else if multi {
+        let rules = cli.rules.load();
+        reopen = Some(reopen_local(cli.mounts, cli.no_cache, rules.clone()));
+        // A single backend serves all roots. Use directory listing rather than choosing an
+        // MFT backend based on just one of potentially several volumes.
+        if cli.mounts.mft {
+            eprintln!("dfdu: --mft is not used for multiple roots; listing directories");
+        }
+        let local = Local {
+            mft: false,
+            threads: None,
+            job: cli.mounts.job(),
+            rules,
+        };
+        let job_paths = paths.clone();
+        Source::Multiple {
+            paths,
+            start: Box::new(move |opts| {
+                let jobs = job_paths.iter().map(|path| local.job(path)).collect();
+                let (engine, _) = local.start(&job_paths[0], opts);
+                (engine, jobs)
+            }),
         }
     } else {
         let resumed = (cli.resume_from.as_deref().map(read_export))
@@ -91,7 +119,7 @@ pub fn run(cli: Cli) -> Result<ExitCode, ExitCode> {
     let opts = dfdu_tui::RunOptions {
         source,
         engine,
-        history: !cli.no_history && cli.import.is_none(),
+        history: !multi && !cli.no_history && cli.import.is_none(),
         reopen,
         ui: UiSettings {
             theme,

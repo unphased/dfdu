@@ -6,10 +6,13 @@ description: Open a directory in dfdu, the keys, the views, mounts and the scan 
 ```sh
 dfdu                      # browse the current directory
 dfdu ~                    # browse a directory
+dfdu ~/dev ~/Downloads    # browse multiple directories
 dfdu --disks              # pick a disk first
 dfdu --type video ~       # only video files
 dfdu --remote server /srv # another host over ssh (dfdu installed there)
 ```
+
+Multiple paths start independent local scans in the interactive terminal browser. Deleting items is disabled for multi-root scans; scan one root at a time to delete. Native cleanup commands remain available. Use `Ctrl-G` to go to a folder in any of the scanned roots. Multiple paths are not supported with `--remote` or when stdout is not a terminal. The `--disks`, `--file` and `--resume-from` options cannot be combined with paths. Subcommands such as `dfdu scan` accept one path, not multiple paths. On Windows, `--mft` is not used for multiple roots; dfdu lists directories instead.
 
 ## Keys
 
@@ -78,7 +81,7 @@ Like `ncdu -x`, a scan stays on one filesystem. Add `--cross-mounts` for other l
 
 ## The scan cache
 
-Scans that took 3 s or more are cached, so the next `dfdu PATH` opens at once and refreshes in the background (`cached 3 h ago, refreshing` in the header). On macOS, Windows and btrfs only the changed directories are read again.
+Single-root scans that took 3 s or more are cached, so the next `dfdu PATH` opens at once and refreshes in the background (`cached 3 h ago, refreshing` in the header). On macOS, Windows and btrfs only the changed directories are read again. Multi-root scans do not read or write the scan cache and are not recorded in scan history.
 
 A cache is used for 14 days and the cache keeps at most 1 GiB, readable only by you. `--no-cache` scans afresh, `DFDU_CACHE=0` turns it off, `dfdu cache list` and `dfdu cache clear` manage it.
 

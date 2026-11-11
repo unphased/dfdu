@@ -49,6 +49,8 @@ pub enum Overlay {
     MarkPattern(mark_pattern::Prompt),
     /// The path of a folder to go to.
     GoTo(goto::Prompt),
+    /// The scanned roots, above their individual directory trees.
+    Roots(usize),
 }
 
 pub struct App {
@@ -63,6 +65,7 @@ pub struct App {
     pub session: SessionState,
     /// Where the Files list is scrolled to: its first row on screen.
     pub scroll: usize,
+    pub(crate) roots_initialized: bool,
     /// The scroll of each directory left, restored on the way back as the session restores
     /// its selection.
     scrolls: HashMap<HostPath, usize>,
@@ -98,6 +101,7 @@ impl App {
             theme,
             session: SessionState::new(now),
             scroll: 0,
+            roots_initialized: false,
             scrolls: HashMap::new(),
             columns: crate::view::columns::Columns::default(),
             overlay: Overlay::None,
@@ -202,6 +206,7 @@ impl App {
             Overlay::Types(_) => return type_filter::key(self, k),
             Overlay::MarkPattern(_) => return mark_pattern::key(self, k),
             Overlay::GoTo(_) => return goto::key(self, k),
+            Overlay::Roots(_) => return crate::view::roots::key(self, k),
         }
         if filter::editing(self) {
             // `↑`/`↓` move the cursor in the list; the other keys edit the query.

@@ -56,6 +56,9 @@ fn show(app: &mut App, path: HostPath, root: HostPath) {
         app.session.hide_hidden = false;
         app.session.request_refilter();
     }
+    if matches!(app.overlay, crate::app::Overlay::Roots(_)) {
+        app.overlay = crate::app::Overlay::None;
+    }
     if let Some(moved) = view::show(&mut app.session, &Show { path, root }) {
         app.went(moved);
     }
@@ -240,6 +243,62 @@ mod tests {
         command(&mut session, json!({"goto":target}));
         let _ = session.tick(now).unwrap();
         assert_eq!(command(&mut session, json!({"state":null}))["path"], target);
+        drop(session);
+        engine.shutdown(Duration::from_millis(200));
+    }
+
+    #[test]
+    fn peer_matches_and_goto_cross_scan_roots() {
+        use dfdu_engine::test_support::meta;
+        use dfdu_tree::{Kind, Tree};
+
+        let mut tree = Tree::new();
+        let a = tree.new_root(b"/a", &meta(Kind::Dir, 0, 1), true);
+        let b = tree.new_root(b"/b", &meta(Kind::Dir, 0, 2), true);
+        tree.add_file(a, b"file", &meta(Kind::File, 3, 3), true, None);
+        tree.add_file(b, b"file", &meta(Kind::File, 3, 4), true, None);
+        let a_file = tree.host_path(a).join(b"file").display().to_string();
+        let b_file = tree.host_path(b).join(b"file").display().to_string();
+        let engine = Engine::start(PortableBackend::default(), EngineOptions::default());
+        engine.load(tree);
+        let now = Instant::now();
+        let mut session = Session::over(
+            &engine,
+            App::new(Theme::no_color(), now),
+            SessionOptions::default(),
+        );
+        let _ = session.tick(now).unwrap();
+        assert!(matches!(
+            session.front().overlay,
+            crate::app::Overlay::Roots(_)
+        ));
+        assert_eq!(
+            command(&mut session, json!({"goto":"missing"}))["ok"],
+            false
+        );
+        assert!(matches!(
+            session.front().overlay,
+            crate::app::Overlay::Roots(_)
+        ));
+        let first = command(
+            &mut session,
+            json!({"match":{"size":3,"name":"file","parents":["a"]}}),
+        );
+        assert_eq!(first["path"], a_file);
+        assert!(matches!(session.front().overlay, crate::app::Overlay::None));
+        let _ = session.tick(now).unwrap();
+        assert_eq!(command(&mut session, json!({"state":null}))["path"], a_file);
+        session.front_mut().overlay = crate::app::Overlay::Roots(0);
+        let second = command(&mut session, json!({"next":null}));
+        assert_eq!(second["path"], b_file);
+        assert!(matches!(session.front().overlay, crate::app::Overlay::None));
+        let _ = session.tick(now).unwrap();
+        assert_eq!(command(&mut session, json!({"state":null}))["path"], b_file);
+        session.front_mut().overlay = crate::app::Overlay::Roots(0);
+        assert_eq!(command(&mut session, json!({"goto":a_file}))["ok"], true);
+        assert!(matches!(session.front().overlay, crate::app::Overlay::None));
+        let _ = session.tick(now).unwrap();
+        assert_eq!(command(&mut session, json!({"state":null}))["path"], a_file);
         drop(session);
         engine.shutdown(Duration::from_millis(200));
     }

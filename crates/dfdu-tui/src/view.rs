@@ -12,6 +12,7 @@ mod footer;
 mod header;
 mod list;
 mod marks;
+pub(crate) mod roots;
 mod selection;
 
 use std::time::Instant;
@@ -122,6 +123,14 @@ pub fn draw(f: &mut Frame, app: &mut App, now: Instant) {
         Overlay::Types(_) => Some(type_filter::draw(f, app, area)),
         Overlay::MarkPattern(_) => Some(mark_pattern::draw(f, app, area)),
         Overlay::GoTo(_) => Some(goto::draw(f, app, area)),
+        Overlay::Roots(_) => Some(roots::draw(
+            f,
+            app,
+            Rect {
+                height: area.height.saturating_sub(1),
+                ..area
+            },
+        )),
     };
     motion::post_process(app, f.buffer_mut(), now);
 }
