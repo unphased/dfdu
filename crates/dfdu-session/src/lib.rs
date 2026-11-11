@@ -43,6 +43,7 @@ pub mod largest;
 pub mod line;
 pub mod mark_pattern;
 pub mod marks;
+pub mod match_index;
 pub mod order;
 pub mod outside;
 pub mod palette;
