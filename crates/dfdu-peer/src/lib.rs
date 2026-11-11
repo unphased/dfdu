@@ -724,7 +724,10 @@ pub fn attach(id: &str) -> io::Result<()> {
         let _ = io::copy(&mut io::stdin().lock(), &mut input);
         let _ = input.shutdown(Shutdown::Both);
     });
-    let result = io::copy(&mut stream, &mut io::stdout().lock());
+    // StdoutLock enables Linux io::copy's splice path, which can hold the stdout
+    // pipe lock while waiting for socket input. That blocks even sshd's
+    // nonblocking pipe reader, preventing it from forwarding stdin to us.
+    let result = io::copy(&mut stream, &mut io::stdout());
     let _ = stream.shutdown(Shutdown::Both);
     result.map(|_| ())
 }
