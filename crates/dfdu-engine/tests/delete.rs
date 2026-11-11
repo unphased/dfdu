@@ -231,6 +231,59 @@ fn refusals_with<B: Backend>(backend: fn() -> B) {
     e.shutdown(Duration::from_secs(1));
 }
 
+#[test]
+fn multi_root_deletes_are_refused_without_mutation() {
+    let first = fixture();
+    let second = fixture();
+    let journal = tagged_tempdir("multi-journal");
+    let e = engine(
+        PortableBackend::default(),
+        Some(journal.path().to_path_buf()),
+        false,
+    );
+    scan(&e, first.path());
+    scan(&e, second.path());
+    let items = e.read(|m| {
+        m.tree
+            .roots()
+            .map(|root| {
+                let ix = common::child(&m.tree, root, "junk");
+                m.tree.node_ref(ix)
+            })
+            .collect::<Vec<_>>()
+    });
+    assert_eq!(items.len(), 2);
+    for mode in [Mode::Permanent, Mode::Stage, Mode::Trash] {
+        for selection in [items.clone(), vec![items[0]], vec![items[1]]] {
+            e.send(Command::Delete {
+                items: selection,
+                mode,
+            });
+            assert!(e.wait_idle(Some(Duration::from_secs(20))).is_idle());
+            e.read(|m| {
+                assert!(m.status.last_delete.is_none());
+                assert_eq!(
+                    m.status.notices.last().map(String::as_str),
+                    Some("delete: unavailable for scans with multiple roots")
+                );
+            });
+            assert!(first.path().join("junk/b.bin").exists());
+            assert!(second.path().join("junk/b.bin").exists());
+            e.read(|m| {
+                for item in &items {
+                    assert!(m.tree.resolve_visible(*item).is_some());
+                }
+            });
+        }
+    }
+    e.shutdown(Duration::from_secs(5));
+    assert!(
+        !journal_kinds(journal.path())
+            .iter()
+            .any(|kind| kind == "intent")
+    );
+}
+
 fn engine_staging<B: Backend>(backend: B, state: &Path, window: Duration) -> Engine<B> {
     Engine::start(
         backend,

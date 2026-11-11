@@ -179,6 +179,24 @@ fn go_opens_a_directory_of_the_scan_or_returns_one_outside_it() {
 }
 
 #[test]
+fn go_opens_another_scanned_root_even_from_a_file() {
+    let mut s = at_root();
+    s.snap.roots = vec![unix("/r"), unix("/other")];
+    s.snap.root_path = unix("/r");
+    s.snap.dir_path = unix("/r");
+    s.from_file = Some(FROM_FILE);
+    assert!(matches!(
+        go(&mut s, "/other/child", dir),
+        Ok(Gone::Within(Some(_)))
+    ));
+    assert_eq!(s.target.path, unix("/other/child"));
+    assert_eq!(
+        go(&mut s, "/outside", dir).err().as_deref(),
+        Some(FROM_FILE)
+    );
+}
+
+#[test]
 fn go_stays_where_it_is_when_the_tree_has_no_folder_there() {
     let mut s = at_root();
     let before = (s.target.path.clone(), s.selected.clone().map(|x| x.name));
@@ -244,6 +262,23 @@ fn go_through_a_link_into_the_scan_opens_the_folder_inside() {
     }
 }
 
+#[cfg(unix)]
+#[test]
+fn go_through_a_link_into_another_root() {
+    let tmp = tempfile::tempdir().expect("temp dir");
+    let root = dunce::canonicalize(tmp.path()).expect("canonical");
+    let other = root.join("other");
+    std::fs::create_dir_all(other.join("d")).expect("mkdir");
+    std::os::unix::fs::symlink(&other, root.join("link")).expect("symlink");
+    let mut s = at_root();
+    s.outside.local = true;
+    s.snap.roots = vec![s.snap.root_path.clone(), HostPath::local(&other)];
+    match go(&mut s, &root.join("link/d").to_string_lossy(), dir) {
+        Ok(Gone::Within(Some(m))) => assert_eq!(m.opened, Some(HostPath::local(&other.join("d")))),
+        other => panic!("{other:?}"),
+    }
+}
+
 /// `/r` with the folders `a` (scanned), `p` (being scanned), `m` (a mount not entered) and
 /// `n` (a network mount not entered), and the file `f`.
 fn tree() -> Tree {
@@ -285,6 +320,26 @@ fn the_tree_says_what_is_at_a_path_inside_the_scan() {
     assert_eq!(at("/r/nope"), kept(Kept::Missing, "/r/nope"));
     assert_eq!(at("/r/p/x"), kept(Kept::NotYet, "/r/p/x"));
     assert_eq!(at("/elsewhere"), kept(Kept::Missing, "/elsewhere"));
+}
+
+#[test]
+fn reach_chooses_the_most_specific_matching_root() {
+    let mut t = Tree::new();
+    t.set_host(Host::Unix);
+    let d = meta(Kind::Dir, 0, 1);
+    let _ = t.new_root(b"/r", &d, true);
+    let nested = t.new_root(b"/r/nested", &d, true);
+    let _ = t.add_dir(nested, b"child", &d);
+    let other = t.new_root(b"/other", &d, true);
+    let _ = t.add_dir(other, b"child", &d);
+    assert_eq!(
+        reach(&t, &unix("/r/nested/child")),
+        Reach::Dir(unix("/r/nested/child"))
+    );
+    assert_eq!(
+        reach(&t, &unix("/other/child")),
+        Reach::Dir(unix("/other/child"))
+    );
 }
 
 #[test]
