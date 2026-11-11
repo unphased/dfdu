@@ -4,6 +4,9 @@
 //! returns when the user quits, or with a new scan opened when the user asked for a path outside
 //! the scan ([`Exit::Reopen`]).
 
+#[cfg(test)]
+mod tests;
+
 use std::io;
 use std::time::{Duration, Instant};
 
@@ -19,6 +22,7 @@ use crate::app::{App, Effect};
 use crate::features::{debug, selected_path};
 use crate::input::mouse;
 use crate::overlay::goto;
+use crate::preview::runtime::{self as preview, Preview};
 use crate::state::motion;
 use crate::{UiOptions, view};
 
@@ -111,7 +115,19 @@ where
         cache: ui.cache.clone(),
     };
     let mut session = Session::over(engine, app, jobs);
-    let result = run(terminal, &mut session, input, ui.mouse, &mut open);
+    let mut previews = Preview::new(
+        io::stdout(),
+        preview::enabled() && ui.local && !ui.from_file,
+    )?;
+    let result = run(
+        terminal,
+        &mut session,
+        input,
+        ui.mouse,
+        &mut open,
+        &mut previews,
+    );
+    drop(previews);
     session.shutdown(Duration::ZERO);
     result
 }
@@ -124,6 +140,7 @@ fn run<T, B, N>(
     input: &Receiver<Event>,
     mouse_on: bool,
     open: &mut impl FnMut(&mut Terminal<T>, &HostPath, Option<Scanned>) -> io::Result<Result<N, String>>,
+    previews: &mut Preview<impl io::Write>,
 ) -> io::Result<Option<N>>
 where
     T: ratatui::backend::Backend<Error = io::Error>,
@@ -142,7 +159,9 @@ where
         if tick.changed || answered || input_dirty || motion_due {
             let drawing = Instant::now();
             let app = session.front_mut();
-            terminal.draw(|f| view::draw(f, app, now))?;
+            let area = terminal.draw(|f| view::draw(f, app, now))?.area;
+            // Graphics are outside ratatui's cell buffer and must follow its flush.
+            previews.after_draw(preview::request(session.front(), area))?;
             let read = session.read_cost();
             debug::frame_drawn(session.front_mut(), drawing.elapsed(), read);
             session.shown(now);
@@ -152,6 +171,7 @@ where
             return Ok(None);
         }
         if let Some(path) = session.front_mut().reopen.take() {
+            previews.clear()?;
             let scanned = session.scanned(&path);
             match open(terminal, &path, scanned)? {
                 Ok(opened) => return Ok(Some(opened)),
@@ -191,6 +211,13 @@ where
                 Ok(_) => {}
                 // The input thread ended (terminal closed): leave.
                 Err(_) => return Ok(None),
+            },
+            recv(previews.results()) -> decoded => {
+                match decoded {
+                    Ok(decoded) => previews.complete(decoded),
+                    Err(_) => previews.disable()?,
+                }
+                input_dirty = true;
             },
             recv(changes) -> _ => session.note_change(),
             default(wake) => {}

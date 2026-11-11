@@ -94,6 +94,35 @@ Both sides do this, so you can compare the pictures. The decoder is
 `~/.vim/jpg-preview`, split into a library and used as a path dependency.
 Layout is deliberately simple for now.
 
+### Part C: UI wiring (complete)
+
+The Files view (including tree mode) previews local, nonimported files in kitty, outside tmux
+and screen. The list must be at least 40 columns wide. Placement starts in its right half,
+beside the selected row, and fits within the remaining list area, at most 40 by 12 cells.
+Other views, overlays and the debug panel hide it. Decode errors leave no image.
+
+```mermaid
+flowchart LR
+  F[draw and flush frame] --> S[select path and cell rectangle]
+  S --> W[one background decoder]
+  W --> R[generation-checked result]
+  R --> F
+  F --> G[write cached kitty stream]
+  S --> D[delete on change or hide]
+```
+
+The UI writes graphics only after drawing. One worker decodes at a time; rapid moves retain
+only the latest request, not a queue of old selections. Results carry the request and generation,
+so changing away and back cannot accept old work. Each unchanged frame reuses the completed
+stream. Selection or placement changes invalidate it. Quit, errors and reopen clear it; terminal
+restoration and the panic hook also delete the fixed id before leaving the alternate screen.
+A decoder still running at exit has no terminal writer and is not joined.
+
+Tests cover asynchronous work, cached redraws, stale results, resize, failure and local-only
+eligibility. A real PNG scan through the run loop checks completion wakeup, output after the
+frame flush, and deletion on selection, view, overlay, quit and the reopen/suspend boundary.
+No live kitty screenshot assertion is automated.
+
 ## Carried over from `scanner`
 
 | Keep (cherry-pick or port) | Drop |

@@ -37,6 +37,14 @@ Unreadable entries are marked `!` with the reason. Press `!` to list them all.
 
 The cleanup view (`3`) lists what the [cleanup rules](/docs/rules/) found, with how safe each match is to delete and how much it frees. The treemap (`2`), tree mode (`T`), duplicates (`4`) and largest files (`5`) are one key away from the list.
 
+## Image previews
+
+In kitty, highlighting a JPEG, PNG or ARW file in the Files view (`1`, including tree mode) shows a preview beside its row. No key or option is needed. The list must be at least 40 columns wide. The preview uses its right half, up to 40 columns by 12 rows, clipped to the space below the selected row.
+
+Previews read local files only, not `--remote` scans or imported snapshots. They are disabled in tmux, screen and terminals not recognized as kitty. Decoding runs in the background; moving before it finishes discards the old result. An unreadable or invalid image has no preview.
+
+Changing the selection or view, opening an overlay or the debug panel, leaving the browser, or handing the terminal back for a connection clears the image. Closing the overlay or returning to Files restores it.
+
 ## Other folders
 
 The scan starts at the folder you named, but you can leave it. At the top of the scan, `←` says so; press it again within a second or so to scan the folder above. `Ctrl-G` opens a prompt with the current folder: type a path (absolute, or relative to the current folder) and press Enter. On a scan of this computer, a path can also start with `~` for your home folder. A folder inside the scan opens at once; one outside it is scanned, with the same options. A folder inside the scan that the scan has not reached, or a mount it did not enter, keeps you where you are, and the status line says why. `Tab` completes a folder name, and Esc closes the prompt.

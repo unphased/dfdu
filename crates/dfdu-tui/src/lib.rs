@@ -293,6 +293,7 @@ fn restore_on_panic(mouse: bool) {
     let restore = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         if !dfdu_engine::panic_is_caught_by_engine(std::thread::current().name()) {
+            preview::runtime::delete_terminal_image();
             // ratatui's hook leaves raw mode and the alternate screen but does not show the
             // cursor or end mouse capture; the terminal's Drop would show the cursor, but only
             // if unwinding gets that far.

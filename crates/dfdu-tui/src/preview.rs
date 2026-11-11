@@ -1,4 +1,5 @@
-//! Pure decisions for terminal image previews. No terminal or file I/O is performed here.
+//! Decisions for terminal image previews. The private runtime decodes off-thread and writes
+//! graphics after the UI frame.
 
 use std::path::{Path, PathBuf};
 

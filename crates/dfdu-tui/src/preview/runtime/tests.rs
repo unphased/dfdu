@@ -51,7 +51,10 @@ fn decode_is_async_cached_and_written_only_after_a_frame() {
     let request = image("a.jpg");
     preview.after_draw(Some(request.clone())).unwrap();
     assert_eq!(starts.recv_timeout(WAIT).unwrap(), request);
-    assert!(out.take().is_empty(), "decode must not write to the terminal");
+    assert!(
+        out.take().is_empty(),
+        "decode must not write to the terminal"
+    );
     finish.send(()).unwrap();
     let decoded = preview.results().recv_timeout(WAIT).unwrap();
     preview.complete(decoded);
@@ -94,7 +97,10 @@ fn stale_work_is_discarded_and_only_the_latest_selection_is_decoded() {
     let decoded = preview.results().recv_timeout(WAIT).unwrap();
     preview.complete(decoded);
     preview.after_draw(None).unwrap();
-    assert!(out.take().is_empty(), "completion after cleanup must not appear");
+    assert!(
+        out.take().is_empty(),
+        "completion after cleanup must not appear"
+    );
 }
 
 #[test]
@@ -116,6 +122,17 @@ fn selection_and_geometry_changes_delete_before_replacement_and_drop_cleans_up()
     assert_eq!(out.take(), b"image");
     drop(preview);
     assert_eq!(out.take(), jpg_preview::delete_image(IMAGE_ID));
+}
+
+#[test]
+fn disabled_preview_does_not_start_work_or_write_graphics() {
+    let out = Output::default();
+    let mut preview = Preview::new(out.clone(), false).unwrap();
+    preview.after_draw(Some(image("a.jpg"))).unwrap();
+    assert!(!preview.busy);
+    assert!(preview.results().try_recv().is_err());
+    drop(preview);
+    assert!(out.take().is_empty());
 }
 
 #[test]
@@ -144,7 +161,10 @@ fn only_local_nonimported_files_in_an_unobscured_files_view_get_a_request() {
     );
     let screen = render_buffer(&mut app, now, 100, 30).area;
     let selected = request(&app, screen).expect("local image");
-    assert_eq!(selected.path, app.session.snap.dir_path.join(b"a.jpg").to_local());
+    assert_eq!(
+        selected.path,
+        app.session.snap.dir_path.join(b"a.jpg").to_local()
+    );
     assert!(selected.area.x >= app.areas.list.x + app.areas.list.width / 2);
     assert_eq!(clip(selected.area, screen), Some(selected.area));
     app.session.outside.local = false;

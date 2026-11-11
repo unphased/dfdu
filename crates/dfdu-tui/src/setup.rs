@@ -113,6 +113,7 @@ pub(crate) fn resolve_theme(
 /// and the alternate screen, then the cursor shown. The terminal's Drop shows the cursor too,
 /// but only after the engine has shut down.
 pub(crate) fn restore_terminal(mouse: bool) {
+    crate::preview::runtime::delete_terminal_image();
     if mouse {
         let _ = execute!(io::stdout(), DisableMouseCapture);
     }
