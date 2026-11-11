@@ -380,7 +380,9 @@ fn navigation_wire_and_direction() {
     assert!(wire(format!("{encoded}\n").as_bytes(), false).is_err());
     let status = Frame::NavStatus(NavStatus {
         seq: 7,
-        verdict: Verdict::Match,
+        best: Some("/target/a".into()),
+        candidates: 1,
+        verdict: Verdict::HashMatch,
     });
     assert!(
         wire(
@@ -407,7 +409,9 @@ fn local_navigation_latest_sequence_and_status() {
         master
             .send_nav_status(NavStatus {
                 seq: 1,
-                verdict: Verdict::Match
+                best: None,
+                candidates: 0,
+                verdict: Verdict::Pending
             })
             .is_err()
     );
@@ -435,7 +439,9 @@ fn local_navigation_latest_sequence_and_status() {
     slave
         .send_nav_status(NavStatus {
             seq: 2,
-            verdict: Verdict::Match,
+            best: Some("/target/a".into()),
+            candidates: 1,
+            verdict: Verdict::HashMatch,
         })
         .unwrap();
     loop {
@@ -444,7 +450,9 @@ fn local_navigation_latest_sequence_and_status() {
             .recv_timeout(Duration::from_secs(3))
             .unwrap()
         {
-            assert_eq!(value.verdict, Verdict::Match);
+            assert_eq!(value.verdict, Verdict::HashMatch);
+            assert_eq!(value.best.as_deref(), Some("/target/a"));
+            assert_eq!(value.candidates, 1);
             break;
         }
     }
@@ -490,7 +498,9 @@ fn navigation_receive_coalesces_and_discards_stale_work() {
             "{}",
             serde_json::to_string(&Frame::NavStatus(NavStatus {
                 seq,
-                verdict: Verdict::Match
+                best: None,
+                candidates: 0,
+                verdict: Verdict::None
             }))
             .unwrap()
         )
@@ -521,9 +531,11 @@ fn navigation_mailbox_is_latest_only_and_rejects_oversized_frames() {
     assert_eq!(
         serde_json::to_string(&Frame::NavStatus(NavStatus {
             seq: 1,
-            verdict: Verdict::Missing
+            best: None,
+            candidates: 0,
+            verdict: Verdict::None
         }))
         .unwrap(),
-        "{\"nav_status\":{\"seq\":1,\"verdict\":\"missing\"}}"
+        "{\"nav_status\":{\"seq\":1,\"best\":null,\"candidates\":0,\"verdict\":\"none\"}}"
     );
 }

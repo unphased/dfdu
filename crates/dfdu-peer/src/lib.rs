@@ -3,6 +3,8 @@
 mod discovery;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod sample_tests;
 pub use discovery::{Beacon, DISCOVERY_PORT, discover, discover_for, remote_peers};
 
 use crossbeam_channel::{Receiver, Sender, unbounded};
