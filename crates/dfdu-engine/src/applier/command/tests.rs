@@ -69,6 +69,79 @@ fn refusals_follow_the_mode() {
     assert_eq!(refused(&r), [true, true, false, false, false, false, false]);
 }
 
+/// Multi-root scans refuse destructive native commands before queuing a deleter request,
+/// but still queue a native dry run.
+#[test]
+fn multi_root_native_runs_are_refused_but_dry_runs_are_queued() {
+    let mut r = rig();
+    let (rules, errors) = dfdu_rules::load_from(
+        &dfdu_rules::Env::current(),
+        &[(
+            dfdu_rules::Source::Builtin,
+            r#"schema_version = 1
+[[rule]]
+id = "test.native"
+category = "dev.build"
+name = "Test native"
+safety = "safe"
+action = "native"
+explanation = "Test."
+lost = "Nothing."
+[rule.match]
+kind = "dir"
+names = ["r"]
+[rule.native]
+command = ["remove", "{path}"]
+dry_run = ["preview", "{path}"]
+"#
+            .into(),
+        )],
+    );
+    assert!(errors.is_empty(), "{errors:?}");
+    let rule = rules.index("test.native").unwrap();
+    r.m.rules = Some(std::sync::Arc::new(rules));
+    let root = r.at("");
+    r.m.tree.set_class(
+        root,
+        Some(dfdu_tree::Class {
+            rule,
+            safety: dfdu_tree::Safety::Safe,
+            degraded: None,
+            flags: dfdu_tree::ClassFlags::NONE,
+        }),
+    );
+    let node = r.m.tree.node_ref(root);
+    r.command(Command::Scan {
+        path: "/s".into(),
+        opts: JobOptions::default(),
+    });
+    assert_eq!(r.m.tree.roots().count(), 2);
+    r.command(Command::RunNative {
+        id: 1,
+        node,
+        variant: None,
+        dry_run: false,
+    });
+    assert!(r.a.take_deleter_controls().is_empty());
+    assert!(r.a.take_plans().is_empty());
+    assert!(r.m.status.native.is_none());
+    assert_eq!(
+        r.m.status.notices.last().map(String::as_str),
+        Some("native command: unavailable for scans with multiple roots")
+    );
+
+    r.command(Command::RunNative {
+        id: 2,
+        node,
+        variant: None,
+        dry_run: true,
+    });
+    let requests = r.a.take_deleter_controls();
+    assert!(matches!(requests.as_slice(), [DeleterReq::Native(req)]
+        if req.dry_run && req.id == 2 && req.command[0] == "preview"));
+    assert!(r.m.status.native.as_ref().is_some_and(|n| n.dry_run));
+}
+
 /// A refused command is said why, and still counted and recorded as applied.
 #[test]
 fn a_refused_command_is_counted_and_said_why() {
