@@ -101,13 +101,13 @@ fn offered_now(app: &App) -> Vec<Hint> {
     let arrows = format!("{}{}", first_key(Action::Up), first_key(Action::Down));
     let help = hint(first_key(Action::Help), "help", 0);
     let quit = hint(first_key(Action::Quit), "quit", 1);
-    let views = hint(
+    let matches = hint(
         format!(
             "{} {}",
-            first_key(Action::PrevView),
-            first_key(Action::NextView)
+            first_key(Action::PrevMatch),
+            first_key(Action::NextMatch)
         ),
-        "views",
+        "matches",
         3,
     );
     if crate::overlay::confirm::is_open(app) {
@@ -150,7 +150,7 @@ fn offered_now(app: &App) -> Vec<Hint> {
         ];
     }
     if let Some(actions) = view_actions(app, &arrows) {
-        return in_view(actions, help, quit, views);
+        return in_view(actions, help, quit, matches);
     }
     if let Some(tree) = app.tree_shown() {
         let fold = crate::state::tree::act::fold_label(tree.fold_ratio).unwrap_or("no fold");
@@ -164,10 +164,10 @@ fn offered_now(app: &App) -> Vec<Hint> {
             hint(first_key(Action::ToggleTree), "list", 3),
             help,
             Hint { drop: 6, ..quit },
-            Hint { drop: 7, ..views },
+            Hint { drop: 7, ..matches },
         ];
     }
-    list_hints(app, arrows, help, quit, views)
+    list_hints(app, arrows, help, quit, matches)
 }
 
 /// The actions of the view shown, as in [`App::key`]; `None` for the list, also where the
@@ -225,8 +225,8 @@ fn view_actions(app: &App, arrows: &str) -> Option<Vec<Hint>> {
 }
 
 /// The hints of a view (Map, Cleanup, Duplicates, Largest): its own actions keep their place
-/// first, then `[ ] views`, then `? help`, and `q quit` goes first when the line is short.
-fn in_view(mut actions: Vec<Hint>, help: Hint, quit: Hint, views: Hint) -> Vec<Hint> {
+/// first, then `[ ] matches`, then `? help`, and `q quit` goes first when the line is short.
+fn in_view(mut actions: Vec<Hint>, help: Hint, quit: Hint, matches: Hint) -> Vec<Hint> {
     let last = actions.iter().map(|h| h.drop).max().unwrap_or(0);
     actions.extend([
         Hint {
@@ -239,7 +239,7 @@ fn in_view(mut actions: Vec<Hint>, help: Hint, quit: Hint, views: Hint) -> Vec<H
         },
         Hint {
             drop: last + 1,
-            ..views
+            ..matches
         },
     ]);
     actions
@@ -303,7 +303,7 @@ fn overlay_hints(overlay: &Overlay, arrows: &str) -> Option<Vec<Hint>> {
 }
 
 /// The hints of the list, with what marks, a running scan and errors add.
-fn list_hints(app: &App, arrows: String, help: Hint, quit: Hint, views: Hint) -> Vec<Hint> {
+fn list_hints(app: &App, arrows: String, help: Hint, quit: Hint, matches: Hint) -> Vec<Hint> {
     let sort = [
         Action::SortSize,
         Action::SortName,
@@ -344,7 +344,7 @@ fn list_hints(app: &App, arrows: String, help: Hint, quit: Hint, views: Hint) ->
     }
     hints.push(help);
     hints.push(quit);
-    hints.push(Hint { drop: 9, ..views });
+    hints.push(Hint { drop: 9, ..matches });
     hints
 }
 

@@ -54,6 +54,8 @@ fn front_end(app: &mut App, a: Action) -> Vec<Effect> {
         Action::GoTo => goto::open(app),
         Action::FocusDetails => return details::focus(app),
         Action::CopyPath => return selected_path::copy(app).into_iter().collect(),
+        Action::PrevMatch => crate::peer_commands::cycle_key(app, -1),
+        Action::NextMatch => crate::peer_commands::cycle_key(app, 1),
         _ => {}
     }
     Vec::new()

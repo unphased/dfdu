@@ -58,6 +58,8 @@ pub enum Action {
     ViewLargest,
     PrevView,
     NextView,
+    PrevMatch,
+    NextMatch,
     TickSuggested,
     DupesKeep,
     CompareAgain,
@@ -158,6 +160,13 @@ pub const ACTIONS: &[ActionInfo] = &[
     ),
     row(Action::GoTo, "Ctrl-G", "go to folder…", Group::Navigate),
     row(
+        Action::PrevMatch,
+        "[",
+        "previous peer match",
+        Group::Navigate,
+    ),
+    row(Action::NextMatch, "]", "next peer match", Group::Navigate),
+    row(
         Action::SortSize,
         "s",
         "sort by size (again: reverse)",
@@ -212,8 +221,8 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Largest view: the largest files below this directory",
         Group::Display,
     ),
-    row(Action::PrevView, "[", "previous view", Group::Display),
-    row(Action::NextView, "]", "next view", Group::Display),
+    row(Action::PrevView, "", "previous view", Group::Display),
+    row(Action::NextView, "", "next view", Group::Display),
     row(
         Action::DupesKeep,
         "K",
@@ -502,6 +511,8 @@ mod tests {
         assert_eq!(first_key(Action::Palette), ":");
         assert_eq!(first_key(Action::ClearMarks), "X");
         assert_eq!(first_key(Action::MarkPattern), "");
+        assert_eq!(first_key(Action::PrevMatch), "[");
+        assert_eq!(first_key(Action::NextMatch), "]");
     }
 
     #[test]

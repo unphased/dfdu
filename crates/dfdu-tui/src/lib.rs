@@ -30,6 +30,7 @@ mod model;
 mod on_select_tests;
 mod overlay;
 mod peer;
+mod peer_commands;
 #[cfg(test)]
 mod peer_tests;
 mod reopen;

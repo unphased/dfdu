@@ -25,6 +25,7 @@ Keys follow ncdu. Press `?` in the app for the full list.
 | `o` `y` | Open in file manager, copy path | `D` | Delete permanently |
 | `r` | Rescan | `q` | Quit |
 | `Ctrl-G` | Go to a folder | `?` | All keys |
+| `[` `]` | Previous, next peer match | | |
 
 Unreadable entries are marked `!` with the reason. Press `!` to list them all.
 
@@ -33,6 +34,23 @@ Set `DFDU_ON_SELECT` to a shell command to run it when the selected local path c
 ```sh
 DFDU_ON_SELECT='printf "%s\n" "$1" >> /tmp/dfdu-selected' dfdu
 ```
+
+## Peer listener
+
+Set `DFDU_LISTEN` to a TCP address to accept line-delimited JSON commands while browsing. It binds the address requested, so use a loopback address unless remote access is intended. The connection is not encrypted. Set `DFDU_PEER_KEY` to require a shared key; without it, anyone who can connect can send commands.
+
+```sh
+DFDU_LISTEN=127.0.0.1:9876 DFDU_PEER_KEY=secret dfdu ~
+```
+
+When a key is set, the first line must be `{"key":"secret"}`. It receives no reply on success. Each following line is an independent command and receives one JSON reply; multiple commands can use the same connection. Without a key, send commands immediately.
+
+- `{"match":{"size":123,"name":"file","parents":["folder"]}}` finds files of that size, ranking the name and parent names. The reply contains `path`, one-based `index` and `count`, or `count: 0` when none match.
+- `{"next":null}` and `{"prev":null}` cycle matches, as do `]` and `[` in the browser.
+- `{"goto":"/path/to/file"}` selects an entry already in the scan and returns its `path`.
+- `{"state":null}` returns the selected `path`, or `null` if none is selected.
+
+Errors are returned as an `error` string. Peer navigation opens the Files view and clears filters that would hide the target.
 
 ## Views
 

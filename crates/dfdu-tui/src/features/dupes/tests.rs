@@ -395,7 +395,7 @@ fn deleting_every_copy_of_a_group_is_refused() {
 }
 
 /// The footer keeps every key of the view at 120 columns, and at 80 lets `q quit` go before
-/// `[ ] views` and the arrows.
+/// `[ ] matches` and the arrows.
 #[test]
 fn the_footer_keeps_the_views_keys_first() {
     let t0 = Instant::now();
@@ -406,12 +406,12 @@ fn the_footer_keeps_the_views_keys_first() {
         frame.lines().last().unwrap_or_default().to_owned()
     };
     let wide = footer(&mut app, 180);
-    for want in ["R compare again", "K keep rule", "[ ] views", "q quit"] {
+    for want in ["R compare again", "K keep rule", "[ ] matches", "q quit"] {
         assert!(wide.contains(want), "{wide}");
     }
     let narrow = footer(&mut app, 80);
     assert!(narrow.contains("↑↓ move"), "{narrow}");
     if narrow.contains("q quit") {
-        assert!(narrow.contains("[ ] views"), "{narrow}");
+        assert!(narrow.contains("[ ] matches"), "{narrow}");
     }
 }

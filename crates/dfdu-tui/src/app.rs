@@ -82,6 +82,7 @@ pub struct App {
     pub cleanup: crate::features::cleanup::Cleanup,
     pub dupes: crate::features::dupes::Dupes,
     pub largest: crate::features::largest::Largest,
+    pub(crate) peer: crate::peer_commands::PeerState,
     /// Where the last frame drew each part of the screen.
     pub areas: Areas,
 }
@@ -111,6 +112,7 @@ impl App {
             cleanup: crate::features::cleanup::Cleanup::default(),
             dupes: crate::features::dupes::Dupes::default(),
             largest: crate::features::largest::Largest::default(),
+            peer: crate::peer_commands::PeerState::default(),
             areas: Areas::default(),
         }
     }

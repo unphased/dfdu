@@ -60,7 +60,9 @@ pub fn run(s: &mut SessionState, a: Action, now: Instant) -> Ran {
         | Action::Types
         | Action::FocusDetails
         | Action::CopyPath
-        | Action::GoTo => return Ran::FrontEnd,
+        | Action::GoTo
+        | Action::PrevMatch
+        | Action::NextMatch => return Ran::FrontEnd,
         Action::MarkPattern if !s.read_only => return Ran::FrontEnd,
         Action::MarkPattern => s.status = Some(READ_ONLY.into()),
         Action::Up => s.move_by(-1),

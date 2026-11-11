@@ -38,14 +38,14 @@ L15 2-2 bold | 4-18 bold | 52-52 bold | 97-97 bold
 L16 2-2 bold | 97-97 bold
   ┃ Ctrl-G           go to folder…                  :      mark by pattern: names in this        ┃
 L17 2-2 bold | 4-9 bold | 52-52 dim | 97-97 bold
-  ┃                                                        directory matching a glob (in the     ┃
-L18 2-2 bold | 97-97 bold
-  ┃ Sort                                                   palette)                              ┃
-L19 2-7 bold | 97-97 bold
-  ┃ s  sort by size (again: reverse)                :      invert the marks in this directory,   ┃
-L20 2-2 bold | 4-4 bold | 52-52 dim | 97-97 bold
- 1┃ n  sort by name (again: reverse)                       as * does in the marks pane (in the   ┃
-L21 0-2 bold | 4-4 bold | 97-97 bold
+  ┃ [                previous peer match                   directory matching a glob (in the     ┃
+L18 2-2 bold | 4-4 bold | 97-97 bold
+  ┃ ]                next peer match                       palette)                              ┃
+L19 2-2 bold | 4-4 bold | 97-97 bold
+  ┃                                                 :      invert the marks in this directory,   ┃
+L20 2-2 bold | 52-52 dim | 97-97 bold
+ 1┃ Sort                                                   as * does in the marks pane (in the   ┃
+L21 0-7 bold | 97-97 bold
   ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ↓ more ┛
 L22 0-0 dim | 2-88 bold | 89-96 bold dim | 97-97 bold
  ↑↓ scroll  PgUp PgDn page  / search  Esc close

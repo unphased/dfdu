@@ -19,6 +19,8 @@ expression: frame
   ┃ ← h Backspace <  parent directory (tree mode:        ┃
   ┃                  collapse)                           ┃
   ┃ Ctrl-G           go to folder…                       ┃
+  ┃ [                previous peer match                 ┃
+  ┃ ]                next peer match                     ┃
   ┃                                                      ┃
   ┃ Sort                                                 ┃
   ┃ s  sort by size (again: reverse)                     ┃
@@ -28,7 +30,5 @@ expression: frame
   ┃ S  re-sort now                                       ┃
   ┃                                                      ┃
   ┃ Display                                              ┃
-  ┃ 1  Files view: the entries of this directory         ┃
-  ┃ 2  Map view: this directory as a treemap             ┃
   ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ↓ more ┛
  ↑↓ scroll  PgUp PgDn page  / search  Esc close

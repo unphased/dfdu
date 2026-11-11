@@ -33,4 +33,4 @@ expression: "render(&mut dev(t0), t0, 120, 32)"
      3.7 GiB  ██▏                         2.6%       3         ▸ compass/                                              │
      3.5 GiB  ██▏                         2.4%       3         ▸ bookdb/                                               │
  ▸ ~/dev/dfdu/target/  17.3 GiB · 42.5% of dfdu/ · 30 items · build                                                8/30
- ↑↓ move  → expand  ← collapse  * expand largest  Enter open  z fold < 1%  T list  ? help  q quit  [ ] views
+ ↑↓ move  → expand  ← collapse  * expand largest  Enter open  z fold < 1%  T list  ? help  q quit  [ ] matches

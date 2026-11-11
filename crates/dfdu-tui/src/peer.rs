@@ -26,21 +26,11 @@ pub(crate) struct Listener {
 }
 
 impl Listener {
-    pub fn bind(addr: &str, key: String) -> io::Result<Self> {
-        if key.is_empty() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "peer key must not be empty",
-            ));
-        }
+    pub fn bind(addr: &str, key: impl Into<Option<String>>) -> io::Result<Self> {
+        let key = key.into();
         let listener = TcpListener::bind(addr)?;
+        #[cfg(test)]
         let addr = listener.local_addr()?;
-        if !addr.ip().is_loopback() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "peer listener must use a loopback address",
-            ));
-        }
         listener.set_nonblocking(true)?;
         let (tx, requests) = unbounded();
         let stop = Arc::new(AtomicBool::new(false));
@@ -51,7 +41,7 @@ impl Listener {
                     Ok((stream, _)) => {
                         let tx = tx.clone();
                         let key = key.clone();
-                        std::thread::spawn(move || serve(stream, &key, &tx));
+                        std::thread::spawn(move || serve(stream, key.as_deref(), &tx));
                     }
                     Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
                         std::thread::sleep(Duration::from_millis(50))
@@ -87,13 +77,17 @@ impl Drop for Listener {
     }
 }
 
-fn serve(mut stream: TcpStream, key: &str, requests: &Sender<Request>) {
+fn serve(mut stream: TcpStream, key: Option<&str>, requests: &Sender<Request>) {
+    if stream.set_nonblocking(false).is_err() {
+        return;
+    }
     let _ = stream.set_read_timeout(Some(Duration::from_secs(30)));
     let _ = stream.set_write_timeout(Some(Duration::from_secs(30)));
     let Ok(read_stream) = stream.try_clone() else {
         return;
     };
     let mut reader = BufReader::new(read_stream);
+    let mut authenticated = key.is_none();
     loop {
         let mut line = Vec::new();
         let Ok(n) = (&mut reader).take(65537).read_until(b'\n', &mut line) else {
@@ -106,16 +100,25 @@ fn serve(mut stream: TcpStream, key: &str, requests: &Sender<Request>) {
             let _ = send(&mut stream, &json!({"error":"invalid request"}));
             break;
         }
-        let Ok(Value::Object(mut object)) = serde_json::from_slice::<Value>(&line) else {
+        let parsed = serde_json::from_slice::<Value>(&line);
+        if !authenticated {
+            if parsed.as_ref().is_ok_and(|value| {
+                value.as_object().is_some_and(|object| {
+                    object.len() == 1 && object.get("key").and_then(Value::as_str) == key
+                })
+            }) {
+                authenticated = true;
+                continue;
+            }
+            let _ = send(&mut stream, &json!({"error":"authentication failed"}));
+            break;
+        }
+        let Ok(Value::Object(object)) = parsed else {
             if send(&mut stream, &json!({"error":"invalid JSON"})).is_err() {
                 break;
             }
             continue;
         };
-        if object.remove("key").as_ref().and_then(Value::as_str) != Some(key) {
-            let _ = send(&mut stream, &json!({"error":"authentication failed"}));
-            break;
-        }
         let (reply, response) = crossbeam_channel::bounded(1);
         if requests
             .send(Request {

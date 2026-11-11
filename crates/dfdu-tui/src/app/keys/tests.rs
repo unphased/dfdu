@@ -6,7 +6,7 @@ use ratatui::crossterm::event::{KeyEvent, KeyModifiers};
 use super::*;
 use crate::app::App;
 
-const ALL: [Action; 62] = [
+const ALL: [Action; 64] = [
     Action::Quit,
     Action::Up,
     Action::Down,
@@ -61,6 +61,8 @@ const ALL: [Action; 62] = [
     Action::ViewLargest,
     Action::PrevView,
     Action::NextView,
+    Action::PrevMatch,
+    Action::NextMatch,
     Action::TickSuggested,
     Action::DupesKeep,
     Action::CompareAgain,
@@ -90,7 +92,15 @@ fn every_action_has_one_registry_row() {
     assert_eq!(groups.len(), 6, "every group has an action");
     let keyless: Vec<_> = ACTIONS.iter().filter(|r| r.keys.is_empty()).collect();
     let keyless: Vec<_> = keyless.iter().map(|r| r.action).collect();
-    assert_eq!(keyless, [Action::MarkPattern, Action::InvertMarks]);
+    assert_eq!(
+        keyless,
+        [
+            Action::PrevView,
+            Action::NextView,
+            Action::MarkPattern,
+            Action::InvertMarks
+        ]
+    );
 }
 
 /// What a view may do with a registry key before the registry sees it: move its own cursor

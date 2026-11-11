@@ -6,7 +6,7 @@ expression: "styled(&frame(state, theme(name, level)))"
 L0 0-5 bold | 6-6 fg=darkgray | 7-15 fg=cyan bold reversed | 16-62 fg=darkgray | 83-98 fg=cyan
  /home/jo                                          1.9M items · 241.6 GiB · 1 error   size ↓ · disk
 L1 1-8 bold | 51-63 fg=darkgray | 64-72 bold | 73-75 fg=darkgray | 76-82 fg=red | 92-94 fg=darkgray
-        size┌ Commands 18/66 ──────────────────────────────────────────────────────────┐
+        size┌ Commands 18/68 ──────────────────────────────────────────────────────────┐
 L2 0-11 fg=darkgray | 88-99 fg=darkgray
  ⠋ 112.0 GiB│ : sort▌                                                                  │
 L3 0-11 reversed | 13-14 bold | 20-20 bold | 88-99 reversed

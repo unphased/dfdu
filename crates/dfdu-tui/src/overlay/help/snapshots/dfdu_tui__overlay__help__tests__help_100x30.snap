@@ -1,6 +1,5 @@
 ---
 source: crates/dfdu-tui/src/overlay/help/tests.rs
-assertion_line: 69
 expression: frame
 ---
  dfdu │ 1 Files │ 2 Map │ 3 Cleanup │ 4 Duplicates │ 5 Largest                     ⠋ scanning 00:00
@@ -21,15 +20,15 @@ expression: frame
   ┃ ← h Backspace <  parent directory (tree         v      mark a range: moving marks every row  ┃
   ┃                  mode: collapse)                       passed (v or Esc ends)                ┃
   ┃ Ctrl-G           go to folder…                  :      mark by pattern: names in this        ┃
-  ┃                                                        directory matching a glob (in the     ┃
-  ┃ Sort                                                   palette)                              ┃
-  ┃ s  sort by size (again: reverse)                :      invert the marks in this directory,   ┃
-  ┃ n  sort by name (again: reverse)                       as * does in the marks pane (in the   ┃
-  ┃ C  sort by items (again: reverse)                      palette)                              ┃
-  ┃ M  sort by modification time (again:            y      copy the selected path (through the   ┃
-  ┃    reverse)                                            terminal, OSC 52)                     ┃
-  ┃ S  re-sort now                                  o      open in the file manager (a file: its ┃
-  ┃                                                        folder)                               ┃
-  ┃ Display                                         d      move to Trash                         ┃
+  ┃ [                previous peer match                   directory matching a glob (in the     ┃
+  ┃ ]                next peer match                       palette)                              ┃
+  ┃                                                 :      invert the marks in this directory,   ┃
+  ┃ Sort                                                   as * does in the marks pane (in the   ┃
+  ┃ s  sort by size (again: reverse)                       palette)                              ┃
+  ┃ n  sort by name (again: reverse)                y      copy the selected path (through the   ┃
+  ┃ C  sort by items (again: reverse)                      terminal, OSC 52)                     ┃
+  ┃ M  sort by modification time (again:            o      open in the file manager (a file: its ┃
+  ┃    reverse)                                            folder)                               ┃
+  ┃ S  re-sort now                                  d      move to Trash                         ┃
   ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ↓ more ┛
  ↑↓ scroll  PgUp PgDn page  / search  Esc close

@@ -158,6 +158,8 @@ mod tests {
             (c('2'), Action::ViewMap),
             (c('3'), Action::ViewCleanup),
             (c('4'), Action::ViewDupes),
+            (c('['), Action::PrevMatch),
+            (c(']'), Action::NextMatch),
             (c('t'), Action::Types),
             (c('+'), Action::TreemapDeeper),
             (c('-'), Action::TreemapShallower),

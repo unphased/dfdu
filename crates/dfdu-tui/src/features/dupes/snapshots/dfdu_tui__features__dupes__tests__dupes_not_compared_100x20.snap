@@ -1,6 +1,5 @@
 ---
 source: crates/dfdu-tui/src/features/dupes/tests.rs
-assertion_line: 293
 expression: frame
 ---
  dfdu │ 1 Files │ 2 Map │ 3 Cleanup │ 4 Duplicates │ 5 Largest                        done in 00:00
@@ -22,4 +21,4 @@ expression: frame
 
 
 
- Enter compare now  Esc back to Files  ? help  q quit  [ ] views
+ Enter compare now  Esc back to Files  ? help  q quit  [ ] matches

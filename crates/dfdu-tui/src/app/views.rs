@@ -1,7 +1,7 @@
 //! The five views (`1`-`5`, `dfdu_session::view`): switching between them, and what the header's
 //! tab bar says of each. The view shown is one field of the session
 //! ([`SessionState::view`](dfdu_session::SessionState::view)), and the session's
-//! `view::switch` is the one place that changes it, so `1`-`5`, `[`/`]`, `Esc` and a click on
+//! `view::switch` is the one place that changes it, so `1`-`5`, `Esc` and a click on
 //! a tab switch the same way ([`switch`]).
 //!
 //! Files, Map and Largest show the current directory; Cleanup and Duplicates cover the whole
@@ -82,25 +82,26 @@ mod tests {
     use ratatui::crossterm::event::KeyCode;
 
     use super::*;
+    use crate::app::keys::{self, Action};
     use crate::tests::classified_app;
     use crate::tests::{library_snap, press};
     use crate::theme::Theme;
 
-    /// The views `keys` lead to, one after each key, from Files.
-    fn after(app: &mut App, keys: &[KeyCode]) -> Vec<View> {
-        let t0 = Instant::now();
-        (keys.iter())
-            .map(|&k| {
-                app.key(press(k), t0);
+    /// The views actions lead to, one after each action, from Files.
+    fn after(app: &mut App, actions: &[Action]) -> Vec<View> {
+        actions
+            .iter()
+            .map(|&action| {
+                keys::run(app, action);
                 current(app)
             })
             .collect()
     }
 
     #[test]
-    fn brackets_step_through_the_views_round_the_ends() {
+    fn actions_step_through_the_views_round_the_ends() {
         let (_fx, mut app) = classified_app(Instant::now());
-        let next = [KeyCode::Char(']'); 5];
+        let next = [Action::NextView; 5];
         assert_eq!(
             after(&mut app, &next),
             [
@@ -111,18 +112,18 @@ mod tests {
                 View::Files
             ]
         );
-        let prev = [KeyCode::Char('['); 2];
+        let prev = [Action::PrevView; 2];
         assert_eq!(after(&mut app, &prev), [View::Largest, View::Duplicates]);
     }
 
     #[test]
-    fn without_rules_the_brackets_pass_over_cleanup() {
+    fn without_rules_view_actions_pass_over_cleanup() {
         let t0 = Instant::now();
         let mut app = App::new(Theme::no_color(), t0);
         app.refresh(library_snap(), t0);
-        let keys = [KeyCode::Char(']'), KeyCode::Char(']'), KeyCode::Char('[')];
+        let actions = [Action::NextView, Action::NextView, Action::PrevView];
         assert_eq!(
-            after(&mut app, &keys),
+            after(&mut app, &actions),
             [View::Map, View::Duplicates, View::Map]
         );
     }

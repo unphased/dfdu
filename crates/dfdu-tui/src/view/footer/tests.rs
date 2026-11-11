@@ -23,13 +23,13 @@ fn shown(app: &App, width: u16) -> String {
         .collect()
 }
 
-/// Cleanup's footer keeps its own keys before `[ ] views`, `? help` and `q quit`.
+/// Cleanup's footer keeps its own keys before `[ ] matches`, `? help` and `q quit`.
 #[test]
 fn view_keys_come_before_help_and_quit() {
     let fx = crate::tests::classified();
     let app = crate::features::cleanup::tests::opened(&fx.m, Instant::now());
     let wide = shown(&app, 160);
-    for want in ["f filter", "N command", "[ ] views", "q quit"] {
+    for want in ["f filter", "N command", "[ ] matches", "q quit"] {
         assert!(wide.contains(want), "{wide}");
     }
     let narrow = shown(&app, 80);
@@ -44,7 +44,7 @@ fn hints_change_with_context() {
     assert_eq!(
         shown(&list, 120),
         " ↑↓ move  → open  ← up  s n C M sort  Space mark  / filter  i details  : commands  \
-         ? help  q quit  [ ] views"
+         ? help  q quit  [ ] matches"
     );
     let scanning = app(true, 0, t0);
     assert!(shown(&scanning, 200).contains("  S re-sort  "));

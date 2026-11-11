@@ -175,6 +175,8 @@ impl SessionState {
         };
         self.list.moved = true;
         self.selected = Some(Selection::named(name.to_vec()));
+        // A same-directory move may not read a new snapshot, so resolve the name on reorder.
+        self.request_refilter();
         Some(Moved {
             left,
             opened: Some(parent),

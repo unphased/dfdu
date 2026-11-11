@@ -1,6 +1,5 @@
 ---
 source: crates/dfdu-tui/src/tests/matrix.rs
-assertion_line: 170
 expression: "styled(&frame(state, theme(name, level)))"
 ---
  dfdu │ 1 Files │ 2 Map │ 3 Cleanup │ 4 Duplicates │ 5 Largest                     ⠋ scanning 00:14
@@ -39,14 +38,14 @@ L15 2-2 fg=#88c0d0 | 4-18 fg=#88c0d0 bold | 52-52 fg=#88c0d0 bold | 97-97 fg=#88
 L16 2-2 fg=#88c0d0 | 97-97 fg=#88c0d0
   ┃ Ctrl-G           go to folder…                  :      mark by pattern: names in this        ┃
 L17 2-2 fg=#88c0d0 | 4-9 fg=#88c0d0 bold | 52-52 fg=#8b94a7 | 97-97 fg=#88c0d0
-  ┃                                                        directory matching a glob (in the     ┃
-L18 2-2 fg=#88c0d0 | 97-97 fg=#88c0d0
-  ┃ Sort                                                   palette)                              ┃
-L19 2-2 fg=#88c0d0 | 3-7 fg=#eceff4 bold | 97-97 fg=#88c0d0
-  ┃ s  sort by size (again: reverse)                :      invert the marks in this directory,   ┃
-L20 2-2 fg=#88c0d0 | 4-4 fg=#88c0d0 bold | 52-52 fg=#8b94a7 | 97-97 fg=#88c0d0
- 1┃ n  sort by name (again: reverse)                       as * does in the marks pane (in the   ┃
-L21 0-1 fg=#ebcb8b | 2-2 fg=#88c0d0 | 4-4 fg=#88c0d0 bold | 97-97 fg=#88c0d0
+  ┃ [                previous peer match                   directory matching a glob (in the     ┃
+L18 2-2 fg=#88c0d0 | 4-4 fg=#88c0d0 bold | 97-97 fg=#88c0d0
+  ┃ ]                next peer match                       palette)                              ┃
+L19 2-2 fg=#88c0d0 | 4-4 fg=#88c0d0 bold | 97-97 fg=#88c0d0
+  ┃                                                 :      invert the marks in this directory,   ┃
+L20 2-2 fg=#88c0d0 | 52-52 fg=#8b94a7 | 97-97 fg=#88c0d0
+ 1┃ Sort                                                   as * does in the marks pane (in the   ┃
+L21 0-1 fg=#ebcb8b | 2-2 fg=#88c0d0 | 3-7 fg=#eceff4 bold | 97-97 fg=#88c0d0
   ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ↓ more ┛
 L22 0-0 fg=#8b94a7 | 2-88 fg=#88c0d0 | 89-96 fg=#8b94a7 | 97-97 fg=#88c0d0
  ↑↓ scroll  PgUp PgDn page  / search  Esc close
