@@ -105,9 +105,11 @@ impl Browser {
             cmd.env("DFDU_TEST_UI_PANIC", "1");
         }
         if peer {
-            cmd.arg("--peer")
-                .args(extra)
-                .env("HOME", state)
+            cmd.arg("--peer");
+        }
+        cmd.args(extra);
+        if peer || extra.contains(&"--bind") {
+            cmd.env("HOME", state)
                 .env("DFDU_SSH", state.join("fake-ssh"));
         }
         let child = cmd.spawn().unwrap();
@@ -287,7 +289,7 @@ fn two_peer_browsers_bind_locally_and_through_fake_ssh() {
             &source,
             &state,
             false,
-            true,
+            false,
             &[
                 "--bind",
                 &target,

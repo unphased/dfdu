@@ -21,7 +21,7 @@ Register-ArgumentCompleter -Native -CommandName 'dfdu' -ScriptBlock {
 
     $completions = @(switch ($command) {
         'dfdu' {
-            [CompletionResult]::new('--bind', '--bind', [CompletionResultType]::ParameterName, 'Bind to ID, ''HOST ID'' or HOST:ID at startup')
+            [CompletionResult]::new('--bind', '--bind', [CompletionResultType]::ParameterName, 'Bind to ID, ''HOST ID'' or HOST:ID at startup (implies --peer)')
             [CompletionResult]::new('--peer-remote-bin', '--peer-remote-bin', [CompletionResultType]::ParameterName, 'Remote dfdu executable for peer binding (expanded by the remote shell)')
             [CompletionResult]::new('--resume-from', '--resume-from', [CompletionResultType]::ParameterName, 'Open the scan saved in FILE (a snapshot or an ncdu export) at once, and rescan its directory in the background, replacing it when done. A snapshot is rescanned with the mount options it was taken with')
             [CompletionResult]::new('-f', '-f', [CompletionResultType]::ParameterName, 'Browse a scan saved in FILE (a snapshot, an ncdu JSON export, plain or zstd, or an ncdu binary export from `ncdu -O`; `-` for stdin), read-only')

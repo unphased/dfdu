@@ -18,7 +18,7 @@ set edit:completion:arg-completer[dfdu] = {|@words|
     }
     var completions = [
         &'dfdu'= {
-            cand --bind 'Bind to ID, ''HOST ID'' or HOST:ID at startup'
+            cand --bind 'Bind to ID, ''HOST ID'' or HOST:ID at startup (implies --peer)'
             cand --peer-remote-bin 'Remote dfdu executable for peer binding (expanded by the remote shell)'
             cand --resume-from 'Open the scan saved in FILE (a snapshot or an ncdu export) at once, and rescan its directory in the background, replacing it when done. A snapshot is rescanned with the mount options it was taken with'
             cand -f 'Browse a scan saved in FILE (a snapshot, an ncdu JSON export, plain or zstd, or an ncdu binary export from `ncdu -O`; `-` for stdin), read-only'

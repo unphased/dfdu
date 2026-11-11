@@ -15,7 +15,7 @@ _dfdu() {
 
     local context curcontext="$curcontext" state line
     _arguments "${_arguments_options[@]}" : \
-'--bind=[Bind to ID, '\''HOST ID'\'' or HOST\:ID at startup]:TARGET:_default' \
+'--bind=[Bind to ID, '\''HOST ID'\'' or HOST\:ID at startup (implies --peer)]:TARGET:_default' \
 '--peer-remote-bin=[Remote dfdu executable for peer binding (expanded by the remote shell)]:PEER_REMOTE_BIN:_default' \
 '(--disks -f --file)--resume-from=[Open the scan saved in FILE (a snapshot or an ncdu export) at once, and rescan its directory in the background, replacing it when done. A snapshot is rescanned with the mount options it was taken with]:FILE:_files' \
 '(--disks)-f+[Browse a scan saved in FILE (a snapshot, an ncdu JSON export, plain or zstd, or an ncdu binary export from \`ncdu -O\`; \`-\` for stdin), read-only]:FILE:_files' \
@@ -34,7 +34,7 @@ upload\:"One sent earlier, else send one, without asking"))' \
 '--network[Descend into network filesystems (NFS, SMB, sshfs and other FUSE network mounts); with or without --cross-mounts]' \
 '--mft[Windows, as administrator\: read each NTFS volume'\''s master file table instead of listing its directories, which is much faster on large volumes. Volumes whose table cannot be read are listed as usual]' \
 '--no-rules[Do not classify entries\: no categories, no cleanup candidates]' \
-'(--remote -f --file --resume-from --disks)--peer[Enable peer mode with a private local socket (B binds or unbinds)]' \
+'--peer[Enable peer mode with a private local socket (B binds or unbinds)]' \
 '()--disks[Choose a disk to browse from the mounted filesystems]' \
 '--read-only[Never delete anything\: the browser leaves out its delete keys and runs cleanup commands only as dry runs]' \
 '--no-history[Do not record the scan in the history, nor show what grew since the last one]' \

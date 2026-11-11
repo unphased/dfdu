@@ -39,11 +39,14 @@ fn peers_json_is_an_empty_array_in_a_fresh_home() {
 }
 
 #[test]
-fn bind_requires_peer_mode() {
+fn bind_implies_peer_mode_and_requires_a_terminal() {
     let output = Command::new(env!("CARGO_BIN_EXE_dfdu"))
-        .args(["--bind", "abcdef"])
+        .args(["--bind", "abcdef", "/tmp"])
         .output()
         .unwrap();
-    assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("--peer"));
+    assert_eq!(output.status.code(), Some(2));
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("--peer requires the interactive browser on a terminal")
+    );
 }

@@ -24,7 +24,7 @@ function __fish_dfdu_using_subcommand
     contains -- $cmd[1] $argv
 end
 
-complete -c dfdu -n "__fish_dfdu_needs_command" -l bind -d 'Bind to ID, \'HOST ID\' or HOST:ID at startup' -r
+complete -c dfdu -n "__fish_dfdu_needs_command" -l bind -d 'Bind to ID, \'HOST ID\' or HOST:ID at startup (implies --peer)' -r
 complete -c dfdu -n "__fish_dfdu_needs_command" -l peer-remote-bin -d 'Remote dfdu executable for peer binding (expanded by the remote shell)' -r
 complete -c dfdu -n "__fish_dfdu_needs_command" -l resume-from -d 'Open the scan saved in FILE (a snapshot or an ncdu export) at once, and rescan its directory in the background, replacing it when done. A snapshot is rescanned with the mount options it was taken with' -r -F
 complete -c dfdu -n "__fish_dfdu_needs_command" -s f -l file -d 'Browse a scan saved in FILE (a snapshot, an ncdu JSON export, plain or zstd, or an ncdu binary export from `ncdu -O`; `-` for stdin), read-only' -r -F

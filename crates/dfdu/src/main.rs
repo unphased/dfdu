@@ -72,6 +72,10 @@ const EXIT_CODES: &str = "Exit codes:
     version,
     about,
     args_conflicts_with_subcommands = true,
+    group(clap::ArgGroup::new("peer_mode")
+        .args(["peer", "bind"])
+        .multiple(true)
+        .conflicts_with_all(["remote", "import", "resume_from", "disks"])),
     after_long_help = EXIT_CODES
 )]
 #[expect(
@@ -89,13 +93,16 @@ struct Cli {
     #[command(flatten)]
     rules: RuleArgs,
     /// Enable peer mode with a private local socket (B binds or unbinds).
-    #[arg(long, conflicts_with_all = ["remote", "import", "resume_from", "disks"])]
+    #[arg(
+        long,
+        default_value_if("bind", clap::builder::ArgPredicate::IsPresent, "true")
+    )]
     peer: bool,
-    /// Bind to ID, 'HOST ID' or HOST:ID at startup.
-    #[arg(long, value_name = "TARGET", requires = "peer")]
+    /// Bind to ID, 'HOST ID' or HOST:ID at startup (implies --peer).
+    #[arg(long, value_name = "TARGET")]
     bind: Option<String>,
     /// Remote dfdu executable for peer binding (expanded by the remote shell).
-    #[arg(long, default_value = "~/.local/bin/dfdu", requires = "peer")]
+    #[arg(long, default_value = "~/.local/bin/dfdu", requires = "peer_mode")]
     peer_remote_bin: String,
     /// Choose a disk to browse from the mounted filesystems.
     #[arg(long, conflicts_with = "paths")]
@@ -518,6 +525,36 @@ mod tests {
             vec!["dfdu", "disks", "a", "b"],
         ] {
             assert!(Cli::try_parse_from(args).is_err());
+        }
+    }
+
+    #[test]
+    fn bind_implies_peer_mode() {
+        assert!(!Cli::try_parse_from(["dfdu", "/x"]).unwrap().peer);
+        for args in [
+            vec!["dfdu", "--bind", "abc123", "/x"],
+            vec!["dfdu", "--peer", "--bind", "abc123", "/x"],
+            vec![
+                "dfdu",
+                "--bind",
+                "host:abc123",
+                "--peer-remote-bin",
+                "/bin/dfdu",
+                "/x",
+            ],
+        ] {
+            let cli = Cli::try_parse_from(args).unwrap();
+            assert!(cli.peer);
+            assert_eq!(cli.paths, [PathBuf::from("/x")]);
+        }
+        for args in [
+            vec!["dfdu", "--bind", "abc123", "--remote", "host"],
+            vec!["dfdu", "--bind", "abc123", "--file", "scan"],
+            vec!["dfdu", "--bind", "abc123", "--resume-from", "scan"],
+            vec!["dfdu", "--bind", "abc123", "--disks"],
+            vec!["dfdu", "--peer-remote-bin", "/bin/dfdu"],
+        ] {
+            assert!(Cli::try_parse_from(&args).is_err(), "{args:?}");
         }
     }
 

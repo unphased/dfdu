@@ -40,13 +40,13 @@ For another host, type `HOST ID` or `HOST:ID`. Press `B` again on either side to
 Escape cancels the prompt. The footer shows the local ID when unbound, or the role and
 partner's host/ID when bound. A second binder is refused. Connection errors appear in the
 status line. Browsing remains independent: navigation sync, discovery and role swapping
-are not implemented yet.
+are not implemented yet. `--bind TARGET` binds at startup and implies `--peer`.
 
 ```sh
 dfdu peers                    # list live instances on this host
 dfdu peers --json             # metadata for scripts
-dfdu --peer --bind ab12cd34 /backup
-dfdu --peer --bind 'nas ab12cd34' /source
+dfdu --bind ab12cd34 /backup
+dfdu --bind 'nas ab12cd34' /source
 dfdu --peer --peer-remote-bin /opt/bin/dfdu /source
 make install                  # copy the release binary to ~/.local/bin/dfdu
 ```
