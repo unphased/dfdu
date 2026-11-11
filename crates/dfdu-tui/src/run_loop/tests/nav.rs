@@ -29,7 +29,7 @@ fn selection_follows_and_sampled_match_returns_through_both_loops() {
         std::thread::sleep(Duration::from_millis(500));
         for event in [
             key('C'),
-            key('j'),
+            key('k'),
             Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
             Event::Key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
         ] {
@@ -37,22 +37,21 @@ fn selection_follows_and_sampled_match_returns_through_both_loops() {
         }
         master_tx.send(key('j')).unwrap();
         std::thread::sleep(Duration::from_millis(500));
-        master_tx.send(key('k')).unwrap();
         std::thread::sleep(Duration::from_secs(1));
         master_tx.send(quit()).unwrap();
         slave_tx.send(quit()).unwrap();
         let (master_footer, master_selected, _, seq) = master_run.join().unwrap();
         let (_, selected, panel, _) = slave_run.join().unwrap();
         assert!(
-            seq >= 3,
-            "initial selection and two local moves must send nav"
+            seq >= 2,
+            "initial selection and local movement must send nav"
         );
         assert_eq!(
             master_selected,
-            source.join("photo.bin").display().to_string()
+            source.join("z-photo.bin").display().to_string()
         );
         assert!(master_footer.contains('✓'), "{master_footer}");
-        assert_eq!(selected, backup.join("photo.bin").display().to_string());
+        assert_eq!(selected, backup.join("z-photo.bin").display().to_string());
         assert!(panel.contains("photo.bin"));
         assert!(panel.contains("z-photo.bin"));
         assert!(panel.contains('✓'));

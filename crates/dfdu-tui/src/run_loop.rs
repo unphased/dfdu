@@ -281,7 +281,9 @@ where
                     Ok(dfdu_peer::Event::Error(error)) => {
                         session.front_mut().session.status = Some(format!("peer: {error}"));
                     }
-                    Ok(dfdu_peer::Event::Status(_)) => {}
+                    Ok(dfdu_peer::Event::Status(status)) => {
+                        if status.role == dfdu_peer::Role::Unbound { navigation.reset(session.front_mut()); }
+                    }
                     Ok(dfdu_peer::Event::Nav(nav)) => navigation.receive(session, nav),
                     Ok(dfdu_peer::Event::NavHash(hash)) => {
                         if hash.seq == session.front().nav.seq {

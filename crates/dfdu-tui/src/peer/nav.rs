@@ -89,6 +89,100 @@ mod tests {
         assert_eq!(panel_height(&app, 24), 0);
     }
     #[test]
+    fn completed_scan_rematches_unless_local_selection_moved() {
+        use std::time::{Duration, Instant};
+        let tmp = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(tmp.path()).unwrap();
+        let seed = root.join("seed");
+        let later = root.join("later");
+        let final_root = root.join("final");
+        for p in [&seed, &later, &final_root] {
+            std::fs::create_dir(p).unwrap();
+        }
+        std::fs::write(seed.join("a"), b"a").unwrap();
+        std::fs::write(later.join("wanted"), b"abc").unwrap();
+        std::fs::write(final_root.join("future"), b"abcd").unwrap();
+        let engine = dfdu_engine::Engine::start(
+            dfdu_scan::PortableBackend::default(),
+            dfdu_engine::EngineOptions::default(),
+        );
+        let scan = |path: &std::path::Path| {
+            engine.send(dfdu_engine::Command::Scan {
+                path: path.into(),
+                opts: dfdu_scan::JobOptions::default(),
+            });
+            assert!(engine.wait_idle(Some(Duration::from_secs(5))).is_idle());
+        };
+        scan(&seed);
+        let master = dfdu_peer::Peer::start(Vec::new()).unwrap();
+        let slave = std::sync::Arc::new(dfdu_peer::Peer::start(Vec::new()).unwrap());
+        master
+            .bind(slave.id(), dfdu_peer::DEFAULT_REMOTE_BIN)
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while slave.status().role != dfdu_peer::Role::Slave {
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        let mut ui = crate::UiOptions::from_env();
+        ui.local = true;
+        ui.peer = Some(crate::PeerOptions {
+            peer: slave,
+            remote_bin: String::new(),
+        });
+        let app = crate::app::App::with_options(&ui, Instant::now());
+        let mut session =
+            dfdu_session::Session::over(&engine, app, dfdu_session::SessionOptions::default());
+        let _ = session.tick(Instant::now()).unwrap();
+        jump(&mut session, &seed.join("a").display().to_string());
+        let mut runtime = Runtime::new();
+        let nav = |seq, name: &str, size| Nav {
+            seq,
+            path: format!("/source/{name}"),
+            name: name.into(),
+            kind: dfdu_peer::NavKind::File,
+            size,
+            mtime: 0,
+            parents: Vec::new(),
+        };
+        runtime.receive(&mut session, nav(1, "wanted", 3));
+        assert!(session.front().nav.candidates.is_empty());
+        scan(&later);
+        let _ = session.tick(Instant::now()).unwrap();
+        runtime.tick(&mut session);
+        let _ = session.tick(Instant::now()).unwrap();
+        runtime.tick(&mut session);
+        let selected = |session: &dfdu_session::Session<'_, _, crate::app::App>| {
+            dfdu_session::selected_path::selected(&session.front().session)
+                .unwrap()
+                .0
+                .to_string()
+        };
+        assert_eq!(
+            selected(&session),
+            later.join("wanted").display().to_string(),
+            "moved={} followed={:?} candidates={:?}",
+            runtime.local_moved,
+            runtime.followed,
+            session.front().nav.candidates
+        );
+        runtime.receive(&mut session, nav(2, "future", 4));
+        jump(&mut session, &seed.join("a").display().to_string());
+        let _ = session.tick(Instant::now()).unwrap();
+        runtime.tick(&mut session);
+        scan(&final_root);
+        let _ = session.tick(Instant::now()).unwrap();
+        runtime.tick(&mut session);
+        assert_eq!(selected(&session), seed.join("a").display().to_string());
+        runtime.receive(&mut session, nav(3, "future", 4));
+        let _ = session.tick(Instant::now()).unwrap();
+        assert_eq!(
+            selected(&session),
+            final_root.join("future").display().to_string()
+        );
+        session.shutdown(Duration::ZERO);
+    }
+    #[test]
     fn stale_hash_cannot_change_candidates() {
         let mut state = State {
             seq: 2,
@@ -250,6 +344,7 @@ pub(crate) struct Runtime {
     last_nav: Option<Nav>,
     version: u64,
     followed: Option<String>,
+    following: bool,
     local_moved: bool,
     generation: u64,
 }
@@ -262,6 +357,7 @@ impl Runtime {
             last_nav: None,
             version: 0,
             followed: None,
+            following: false,
             local_moved: false,
             generation: 0,
         }
@@ -335,7 +431,12 @@ impl Runtime {
                         }),
                     )
                 });
-                if self.followed != selected.map(|s| s.0) {
+                let selected = selected.map(|s| s.0);
+                if self.following {
+                    if self.followed == selected {
+                        self.following = false;
+                    }
+                } else if self.followed != selected {
                     self.local_moved = true;
                 }
                 if !busy
@@ -349,19 +450,21 @@ impl Runtime {
                     self.version = version;
                 }
             }
-            dfdu_peer::Role::Unbound => {
-                self.last_path = None;
-                self.last_nav = None;
-                self.followed = None;
-                let seq = session.front().nav.seq;
-                session.front_mut().nav = State {
-                    seq,
-                    ..State::default()
-                };
-                self.generation += 1;
-                self.workers.replace(vec![]);
-            }
+            dfdu_peer::Role::Unbound => self.reset(session.front_mut()),
         }
+    }
+    pub fn reset(&mut self, app: &mut crate::app::App) {
+        self.last_path = None;
+        self.last_nav = None;
+        self.followed = None;
+        self.following = false;
+        self.local_moved = false;
+        app.nav = State {
+            seq: app.nav.seq,
+            ..State::default()
+        };
+        self.generation += 1;
+        self.workers.replace(vec![]);
     }
     pub fn receive<B: dfdu_scan::Backend>(
         &mut self,
@@ -414,11 +517,14 @@ impl Runtime {
         self.last_nav = Some(nav);
         self.local_moved = false;
         self.workers.replace(jobs);
-        if let Some(path) = best {
-            jump(session, &path);
+        self.following = best.is_some();
+        if let Some(path) = &best {
+            jump(session, path);
         }
-        self.followed = dfdu_session::selected_path::selected(&session.front().session)
-            .map(|(p, _)| p.to_string());
+        self.followed = best.or_else(|| {
+            dfdu_session::selected_path::selected(&session.front().session)
+                .map(|(p, _)| p.to_string())
+        });
         publish(session.front());
     }
     pub fn complete(&self, app: &mut crate::app::App, result: Result) {
@@ -462,8 +568,28 @@ pub(crate) fn jump<B: dfdu_scan::Backend>(
     session: &mut dfdu_session::Session<'_, B, crate::app::App>,
     path: &str,
 ) {
-    let gone = session.go_to_path(path);
-    let _ = crate::overlay::goto::gone_to(session.front_mut(), gone);
+    let file = session.engine().read(|m| {
+        let path = dfdu_tree::HostPath::from(path);
+        let ix = dfdu_tree::find_path(&m.tree, &path)?;
+        if m.tree.kind(ix) == dfdu_tree::Kind::Dir {
+            return None;
+        }
+        let mut root = ix;
+        while let Some(parent) = m.tree.parent(root) {
+            root = parent;
+        }
+        Some((path, m.tree.host_path(root)))
+    });
+    let fx = if let Some((path, root)) = file {
+        crate::app::views::carry(
+            session.front_mut(),
+            dfdu_session::view::Then::show(path, root),
+        )
+    } else {
+        let gone = session.go_to_path(path);
+        crate::overlay::goto::gone_to(session.front_mut(), gone)
+    };
+    let _ = session.carry_out(fx);
 }
 
 fn local_files(app: &crate::app::App) -> bool {
