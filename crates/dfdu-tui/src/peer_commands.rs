@@ -115,15 +115,19 @@ pub(crate) fn command<B: dfdu_scan::Backend>(
             let Some(name) = value.get("name").and_then(Value::as_str) else {
                 return json!({"ok":false,"error":"invalid match name"});
             };
-            let Some(parents) = value.get("parents").and_then(Value::as_array) else {
-                return json!({"ok":false,"error":"invalid match parents"});
-            };
-            let Some(parents) = parents
-                .iter()
-                .map(|p| p.as_str().map(str::to_owned))
-                .collect::<Option<Vec<_>>>()
-            else {
-                return json!({"ok":false,"error":"invalid match parents"});
+            let parents = match value.get("parents") {
+                None => Vec::new(),
+                Some(Value::Array(parents)) => {
+                    let Some(parents) = parents
+                        .iter()
+                        .map(|p| p.as_str().map(str::to_owned))
+                        .collect::<Option<Vec<_>>>()
+                    else {
+                        return json!({"ok":false,"error":"invalid match parents"});
+                    };
+                    parents
+                }
+                Some(_) => return json!({"ok":false,"error":"invalid match parents"}),
             };
             let peer = &mut session.front_mut().peer;
             peer.query = Some(Query {
@@ -159,8 +163,6 @@ pub(crate) fn command<B: dfdu_scan::Backend>(
                 return json!({"ok":false,"error":"cannot select root"});
             }
             let app = session.front_mut();
-            app.peer.query = None;
-            app.peer.current = None;
             show(app, path.clone(), root);
             json!({"ok":true,"path":path.display().to_string()})
         }
@@ -343,6 +345,11 @@ mod tests {
             json!({"ok":false,"error":"unsupported command"})
         );
         assert_eq!(
+            command(&mut session, json!({"match":{"size":3,"name":"file"}})),
+            json!({"ok":true,"path":a,"matches":2,"rank":1})
+        );
+        let _ = session.tick(now).unwrap();
+        assert_eq!(
             command(
                 &mut session,
                 json!({"match":{"size":999,"name":"absent","parents":[]}})
@@ -372,7 +379,7 @@ mod tests {
         );
         assert_eq!(
             command(&mut session, json!({"next":null})),
-            json!({"ok":false,"error":"no matches"})
+            json!({"ok":true,"matches":0})
         );
         drop(session);
         engine.shutdown(Duration::from_millis(200));

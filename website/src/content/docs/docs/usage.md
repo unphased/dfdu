@@ -45,12 +45,12 @@ DFDU_LISTEN=127.0.0.1:9876 DFDU_PEER_KEY=secret dfdu ~
 
 When a key is set, the first line must be `{"key":"secret"}`. It receives no reply on success. Each following line is an independent command and receives one JSON reply; multiple commands can use the same connection. Without a key, send commands immediately.
 
-- `{"match":{"size":123,"name":"file","parents":["folder"]}}` finds files of that size, ranking the name and parent names. The reply contains `ok: true`, `path`, one-based `rank` and `matches`, or only `ok: true` and `matches: 0` when none match.
-- `{"next":null}` and `{"prev":null}` cycle matches, as do `]` and `[` in the browser.
+- `{"match":{"size":123,"name":"file","parents":["folder"]}}` finds files of that size, ranking the name and parent names. `parents` is optional and lists names nearest first. The reply contains `ok: true`, `path`, one-based `rank` and `matches`, or only `ok: true` and `matches: 0` when none match.
+- `{"next":true}` and `{"prev":true}` cycle matches, as do `]` and `[` in the browser.
 - `{"goto":"/path/to/file"}` selects an entry already in the scan and returns `ok: true` and its `path`.
-- `{"state":null}` returns `ok: true`, the selected `path` (or `null`), and the current query’s `matches` and one-based `rank`. The rank is 0 when there is no current match.
+- `{"state":true}` returns `ok: true`, the selected `path` (or `null`), and the current query’s `matches` and one-based `rank`. The rank is 0 when there is no current match.
 
-Errors return `ok: false` and an `error` string. Peer navigation opens the Files view and clears filters that would hide the target.
+Errors return `ok: false` and an `error` string. Connections close after 30 seconds without a request. Peer navigation opens the Files view and clears filters that would hide the target.
 
 ## Views
 
