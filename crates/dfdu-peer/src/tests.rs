@@ -179,13 +179,20 @@ fn pending_output_is_bounded_for_nonreading_peers() {
 
 #[test]
 fn timeout_applies_to_handshake_and_bound_connections() {
-    for ready in [false, true] {
+    for (ready, idle) in [(false, HANDSHAKE_TIMEOUT), (true, TIMEOUT)] {
         let (a, _b) = UnixStream::pair().unwrap();
         let mut link = Link::new(a, None, Role::Master, "local", "host").unwrap();
         link.ready = ready;
-        link.last = Instant::now() - TIMEOUT;
+        link.last = Instant::now() - idle;
         assert!(link.poll().unwrap_err().to_string().contains("timed out"));
     }
+}
+#[test]
+fn handshake_waits_past_bound_timeout_for_slow_ssh_auth() {
+    let (a, _b) = UnixStream::pair().unwrap();
+    let mut link = Link::new(a, None, Role::Master, "local", "host").unwrap();
+    link.last = Instant::now() - TIMEOUT;
+    assert!(link.poll().is_ok());
 }
 #[test]
 fn registration_modes_stale_cleanup_and_path_guard() {

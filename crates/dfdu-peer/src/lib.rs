@@ -29,6 +29,8 @@ use std::{
 pub const DEFAULT_REMOTE_BIN: &str = "~/.local/bin/dfdu";
 const LIMIT: usize = 64 * 1024;
 const TIMEOUT: Duration = Duration::from_secs(10);
+/// Allowed before the hello exchange; ssh may spend this long on auth fallbacks.
+const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 const CONNECT_TIMEOUT: Duration = Duration::from_millis(250);
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
