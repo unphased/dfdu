@@ -10,7 +10,7 @@ test:
 		cargo test -p dfdu-peer -p dfdu -p dfdu-session -p dfdu-tui; \
 	fi
 
-install:
+install: all
 	mkdir -p "$(HOME)/.local/bin"
 	cp target/release/dfdu "$(HOME)/.local/bin/dfdu"
 
