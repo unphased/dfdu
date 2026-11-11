@@ -28,6 +28,12 @@ Keys follow ncdu. Press `?` in the app for the full list.
 
 Unreadable entries are marked `!` with the reason. Press `!` to list them all.
 
+Set `DFDU_ON_SELECT` to a shell command to run it when the selected local path changes, including the first selection. The command runs asynchronously with `sh -c`; the selected path is passed as `$1`, not interpolated into the command. Standard input, output and error are disconnected. Remote and imported scans do not run the command. For example:
+
+```sh
+DFDU_ON_SELECT='printf "%s\n" "$1" >> /tmp/dfdu-selected' dfdu
+```
+
 ## Views
 
 ![The cleanup view](/demos/cleanup.gif)

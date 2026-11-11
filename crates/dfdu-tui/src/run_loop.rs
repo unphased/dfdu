@@ -25,6 +25,53 @@ use crate::{UiOptions, view};
 /// Longest sleep when nothing is going on.
 const IDLE: Duration = Duration::from_secs(3600);
 
+pub(crate) struct OnSelect {
+    command: Option<std::ffi::OsString>,
+    previous: Option<HostPath>,
+}
+
+impl OnSelect {
+    pub(crate) fn new(command: Option<std::ffi::OsString>) -> Self {
+        Self {
+            command,
+            previous: None,
+        }
+    }
+
+    pub(crate) fn observe(
+        &mut self,
+        local: bool,
+        selected: Option<HostPath>,
+    ) -> Option<std::path::PathBuf> {
+        let selected = selected.filter(|path| local && path.host() == dfdu_tree::Host::LOCAL)?;
+        if self.previous.as_ref() == Some(&selected) {
+            return None;
+        }
+        let path = selected.to_local();
+        self.previous = Some(selected);
+        Some(path)
+    }
+
+    pub(crate) fn update(&mut self, local: bool, selected: Option<HostPath>) {
+        if let Some(path) = self.observe(local, selected)
+            && let Some(command) = &self.command
+            && let Ok(mut child) = std::process::Command::new("sh")
+                .arg("-c")
+                .arg(command)
+                .arg("dfdu-on-select")
+                .arg(path)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+        {
+            std::thread::spawn(move || {
+                let _ = child.wait();
+            });
+        }
+    }
+}
+
 /// Why the browser's loop returned.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Exit {
@@ -133,9 +180,15 @@ where
     let changes = session.changes().clone();
     // The first frame is drawn at once.
     let mut input_dirty = true;
+    let mut on_select = OnSelect::new(std::env::var_os("DFDU_ON_SELECT"));
     loop {
         let now = Instant::now();
         let tick = session.tick(now)?;
+        let state = &session.front().session;
+        on_select.update(
+            state.outside.local,
+            dfdu_session::selected_path::selected(state).map(|(path, _)| path),
+        );
         // What the scanned host answered the go-to prompt, which the tick took in.
         let answered = goto::poll(session.front_mut());
         let motion_due = (session.front().motion.next_frame_at()).is_some_and(|t| now >= t);

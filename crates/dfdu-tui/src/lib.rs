@@ -26,11 +26,11 @@ mod features;
 mod format;
 mod input;
 mod model;
+#[cfg(test)]
+mod on_select_tests;
 mod overlay;
 mod reopen;
 mod run_loop;
-#[cfg(test)]
-mod on_select_tests;
 mod setup;
 mod state;
 mod theme;
