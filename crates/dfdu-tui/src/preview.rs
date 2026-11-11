@@ -4,6 +4,8 @@ use std::path::{Path, PathBuf};
 
 use ratatui::layout::Rect;
 
+pub(crate) mod runtime;
+
 /// Intersects a requested placement with the available terminal area.
 pub fn clip(requested: Rect, screen: Rect) -> Option<Rect> {
     let left = u32::from(requested.x).max(u32::from(screen.x));
