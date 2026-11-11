@@ -21,6 +21,30 @@ mod tests {
         assert_eq!(mark(Verdict::Pending), "…");
     }
     #[test]
+    fn candidate_panel_is_docked_and_hidden_when_unbound() {
+        let master = dfdu_peer::Peer::start(Vec::new()).unwrap();
+        let slave = std::sync::Arc::new(dfdu_peer::Peer::start(Vec::new()).unwrap());
+        let mut app = crate::app::App::new(crate::theme::Theme::default(), std::time::Instant::now());
+        app.peer = Some(crate::PeerOptions { peer: slave.clone(), remote_bin: String::new() });
+        app.nav.size = Some(21);
+        app.nav.candidates.push(Candidate { path: "/backup/photo.bin".into(), size: 21, mtime: 1234 });
+        assert_eq!(panel_height(&app, 24), 0);
+        master.bind(slave.id(), dfdu_peer::DEFAULT_REMOTE_BIN).unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while slave.status().role != dfdu_peer::Role::Slave {
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(100, 24)).unwrap();
+        terminal.draw(|f| crate::view::draw(f, &mut app, std::time::Instant::now())).unwrap();
+        let dock = app.areas.candidates.unwrap();
+        assert!(app.areas.list.bottom() <= dock.y);
+        let text: String = terminal.backend().buffer().content.iter().map(|c| c.symbol()).collect();
+        for word in ["Candidates", "/backup/photo.bin", "21", "1234", "…"] { assert!(text.contains(word), "missing {word}"); }
+        app.nav.candidates.clear();
+        assert_eq!(panel_height(&app, 24), 0);
+    }
+    #[test]
     fn stale_hash_cannot_change_candidates() {
         let mut state = State {
             seq: 2,
