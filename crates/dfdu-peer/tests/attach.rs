@@ -26,15 +26,21 @@ fn main() {
         let mut input = child.stdin.take().unwrap();
         input
             .write_all(
-                b"{\"type\":\"hello\",\"proto\":1,\"id\":\"attach-test\",\"role\":\"master\"}\n",
+                b"{\"hello\":{\"proto\":1,\"id\":\"attach-test\",\"host\":\"remote\",\"role\":\"master\"}}\n",
             )
             .unwrap();
         let mut output = BufReader::new(child.stdout.take().unwrap());
         let mut line = String::new();
         output.read_line(&mut line).unwrap();
         let hello: serde_json::Value = serde_json::from_str(&line).unwrap();
-        assert_eq!(hello["type"], "hello");
-        assert_eq!(hello["role"], "slave");
+        assert_eq!(hello.as_object().unwrap().len(), 1);
+        assert_eq!(hello["hello"]["role"], "slave");
+        assert_eq!(hello["hello"]["id"], peer.id());
+        assert!(
+            hello["hello"]["host"]
+                .as_str()
+                .is_some_and(|s| !s.is_empty())
+        );
         let until = Instant::now() + Duration::from_secs(4);
         while peer.status().role != Role::Slave {
             assert!(Instant::now() < until);

@@ -60,11 +60,18 @@ pub struct Instance {
     pub role: Role,
 }
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(tag = "type", rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
 enum Frame {
-    Hello { proto: u32, id: String, role: Role },
-    Ping,
-    Bye,
+    Hello(Hello),
+    Ping {},
+    Bye {},
+}
+#[derive(Serialize, Deserialize, Debug)]
+struct Hello {
+    proto: u32,
+    id: String,
+    host: String,
+    role: Role,
 }
 enum Control {
     Bind(String, String),
@@ -81,7 +88,7 @@ pub struct Peer {
     dir: PathBuf,
 }
 fn random_id() -> io::Result<String> {
-    let mut bytes = [0u8; 16];
+    let mut bytes = [0u8; 4];
     fs::File::open("/dev/urandom")?.read_exact(&mut bytes)?;
     Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
 }
@@ -292,6 +299,15 @@ impl Peer {
     pub fn unbind(&self) {
         let _ = self.control.send(Control::Unbind);
     }
+    /// Return a hook for the application's signal worker or panic hook.
+    /// Calling it requests shutdown and registration cleanup without installing global handlers.
+    /// Do not call from a raw signal handler; use a signal iterator or the application's event loop.
+    pub fn cleanup_hook(&self) -> impl Fn() + Send + Sync + 'static {
+        let control = self.control.clone();
+        move || {
+            let _ = control.send(Control::Stop);
+        }
+    }
 }
 use std::os::unix::fs::MetadataExt;
 impl Drop for Peer {
@@ -307,8 +323,8 @@ impl Drop for Peer {
     }
 }
 
-/// List registrations. Delete only entries whose process is gone and endpoint is definitively stale.
-/// On Darwin, refused connections are retained because a full live backlog also refuses connections.
+/// List registrations, removing entries with a dead process or definitively stale endpoint.
+/// On Darwin, a live process's refused connection is retained because a full backlog also refuses.
 pub fn list() -> io::Result<Vec<Instance>> {
     list_in(&directory()?)
 }
@@ -340,7 +356,7 @@ fn list_in(dir: &Path) -> io::Result<Vec<Instance>> {
             || rustix::process::Pid::from_raw(instance.pid as i32).is_none_or(|pid| {
                 rustix::process::test_kill_process(pid) == Err(rustix::io::Errno::SRCH)
             });
-        if dead && connect_local(&path).is_err_and(|e| stale_error(&e)) {
+        if dead || connect_local(&path).is_err_and(|e| stale_error(&e)) {
             let _ = fs::remove_file(path);
             let _ = fs::remove_file(entry.path());
         } else {
@@ -440,7 +456,13 @@ impl Drop for Link {
     }
 }
 impl Link {
-    fn new(stream: UnixStream, child: Option<Transport>, role: Role, id: &str) -> io::Result<Self> {
+    fn new(
+        stream: UnixStream,
+        child: Option<Transport>,
+        role: Role,
+        id: &str,
+        host: &str,
+    ) -> io::Result<Self> {
         let mut link = Self {
             stream,
             _child: child,
@@ -452,11 +474,12 @@ impl Link {
             ready: false,
         };
         link.stream.set_nonblocking(true)?;
-        link.queue(Frame::Hello {
+        link.queue(Frame::Hello(Hello {
             proto: 1,
             id: id.into(),
+            host: host.into(),
             role,
-        });
+        }));
         Ok(link)
     }
     fn queue(&mut self, frame: Frame) {
@@ -497,17 +520,22 @@ impl Link {
                             serde_json::from_slice(&self.input).map_err(io::Error::other)?;
                         self.input.clear();
                         match frame {
-                            Frame::Hello { proto: 1, id, role }
-                                if !self.ready
-                                    && role != self.role
-                                    && role != Role::Unbound
-                                    && !id.is_empty() =>
+                            Frame::Hello(Hello {
+                                proto: 1,
+                                id,
+                                host,
+                                role,
+                            }) if !self.ready
+                                && role != self.role
+                                && role != Role::Unbound
+                                && !id.is_empty()
+                                && !host.is_empty() =>
                             {
                                 self.ready = true;
-                                peer = Some(id);
+                                peer = Some(format!("{host}/{id}"));
                             }
-                            Frame::Ping if self.ready => {}
-                            Frame::Bye => return Err(error("peer disconnected")),
+                            Frame::Ping {} if self.ready => {}
+                            Frame::Bye {} => return Err(error("peer disconnected")),
                             _ => return Err(error("invalid peer handshake or protocol")),
                         }
                         self.last = Instant::now();
@@ -521,7 +549,7 @@ impl Link {
             return Err(error("peer timed out"));
         }
         if self.ready && self.ping.elapsed() >= Duration::from_secs(2) {
-            self.queue(Frame::Ping);
+            self.queue(Frame::Ping {});
             self.ping = Instant::now();
         }
         Ok(peer)
@@ -539,6 +567,18 @@ fn publish(
     *status.lock().unwrap() = value.clone();
     let _ = tx.send(Event::Status(value));
 }
+struct Registration {
+    dir: PathBuf,
+    id: String,
+}
+impl Drop for Registration {
+    fn drop(&mut self) {
+        if let Ok(path) = socket(&self.dir, &self.id) {
+            let _ = fs::remove_file(path);
+        }
+        let _ = fs::remove_file(self.dir.join(format!("{}.json", self.id)));
+    }
+}
 fn run(
     listener: UnixListener,
     rx: Receiver<Control>,
@@ -547,20 +587,24 @@ fn run(
     mut instance: Instance,
     dir: PathBuf,
 ) {
+    let _registration = Registration {
+        dir: dir.clone(),
+        id: instance.id.clone(),
+    };
     let mut link: Option<Link> = None;
     loop {
         while let Ok(control) = rx.try_recv() {
             match control {
                 Control::Stop => {
                     if let Some(link) = &mut link {
-                        link.queue(Frame::Bye);
+                        link.queue(Frame::Bye {});
                         let _ = link.flush();
                     }
                     return;
                 }
                 Control::Unbind => {
                     if let Some(link) = &mut link {
-                        link.queue(Frame::Bye);
+                        link.queue(Frame::Bye {});
                         let _ = link.flush();
                     }
                     link = None;
@@ -571,9 +615,9 @@ fn run(
                         let _ = tx.send(Event::Error("already bound or connecting".into()));
                         continue;
                     }
-                    match connect(&dir, &target, &bin)
-                        .and_then(|(s, c)| Link::new(s, c, Role::Master, &instance.id))
-                    {
+                    match connect(&dir, &target, &bin).and_then(|(s, c)| {
+                        Link::new(s, c, Role::Master, &instance.id, &instance.host)
+                    }) {
                         Ok(value) => link = Some(value),
                         Err(e) => {
                             let _ = tx.send(Event::Error(e.to_string()));
@@ -585,7 +629,19 @@ fn run(
         for _ in 0..16 {
             match listener.accept() {
                 Ok((stream, _)) if link.is_none() => {
-                    match Link::new(stream, None, Role::Slave, &instance.id) {
+                    // Listing probes connect and immediately close without a handshake.
+                    let mut byte = [0u8; 1];
+                    if matches!(
+                        rustix::net::recv(
+                            &stream,
+                            &mut byte,
+                            rustix::net::RecvFlags::PEEK | rustix::net::RecvFlags::DONTWAIT
+                        ),
+                        Ok((0, _))
+                    ) {
+                        continue;
+                    }
+                    match Link::new(stream, None, Role::Slave, &instance.id, &instance.host) {
                         Ok(value) => link = Some(value),
                         Err(e) => {
                             let _ = tx.send(Event::Error(e.to_string()));
@@ -594,7 +650,7 @@ fn run(
                 }
                 Ok((mut stream, _)) => {
                     let _ = stream.set_nonblocking(true);
-                    let _ = stream.write_all(b"{\"type\":\"bye\"}\n");
+                    let _ = stream.write_all(b"{\"bye\":{}}\n");
                 }
                 Err(_) => break,
             }

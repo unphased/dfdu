@@ -13,7 +13,7 @@ fn dir() -> PathBuf {
 }
 fn wire(bytes: &[u8], ready: bool) -> io::Result<Option<String>> {
     let (a, mut b) = UnixStream::pair().unwrap();
-    let mut link = Link::new(a, None, Role::Slave, "local").unwrap();
+    let mut link = Link::new(a, None, Role::Slave, "local", "host").unwrap();
     link.ready = ready;
     b.write_all(bytes).unwrap();
     link.poll()
@@ -22,33 +22,93 @@ fn wire(bytes: &[u8], ready: bool) -> io::Result<Option<String>> {
 fn protocol_requires_version_role_hello_and_bounded_lines() {
     assert_eq!(
         wire(
-            b"{\"type\":\"hello\",\"proto\":1,\"id\":\"other\",\"role\":\"master\"}\n",
+            b"{\"hello\":{\"proto\":1,\"id\":\"other\",\"host\":\"remote\",\"role\":\"master\"}}\n",
             false
         )
         .unwrap(),
-        Some("other".into())
+        Some("remote/other".into())
     );
     for bytes in [
-        b"{\"type\":\"hello\",\"proto\":2,\"id\":\"x\",\"role\":\"master\"}\n".as_slice(),
-        b"{\"type\":\"hello\",\"proto\":1,\"id\":\"x\",\"role\":\"slave\"}\n",
-        b"{\"type\":\"ping\"}\n",
+        b"{\"hello\":{\"proto\":2,\"id\":\"x\",\"host\":\"remote\",\"role\":\"master\"}}\n"
+            .as_slice(),
+        b"{\"hello\":{\"proto\":1,\"id\":\"x\",\"host\":\"remote\",\"role\":\"slave\"}}\n",
+        b"{\"ping\":{}}\n",
         b"garbage\n",
-        b"{\"type\":\"bye\"}\n",
+        b"{\"bye\":{}}\n",
     ] {
         assert!(wire(bytes, false).is_err());
     }
-    assert!(wire(b"{\"type\":\"ping\"}\n", true).is_ok());
+    assert!(wire(b"{\"ping\":{}}\n", true).is_ok());
     let (a, mut b) = UnixStream::pair().unwrap();
-    let mut link = Link::new(a, None, Role::Slave, "local").unwrap();
+    let mut link = Link::new(a, None, Role::Slave, "local", "host").unwrap();
     link.input.resize(LIMIT, b'x');
     b.write_all(b"x").unwrap();
     assert!(link.poll().unwrap_err().to_string().contains("64 KiB"));
 }
 #[test]
+fn exact_wire_envelopes() {
+    let (a, _b) = UnixStream::pair().unwrap();
+    let link = Link::new(a, None, Role::Master, "abcdef12", "actual-host").unwrap();
+    assert_eq!(
+        std::str::from_utf8(&link.output).unwrap(),
+        "{\"hello\":{\"proto\":1,\"id\":\"abcdef12\",\"host\":\"actual-host\",\"role\":\"master\"}}\n"
+    );
+    assert_eq!(
+        serde_json::to_string(&Frame::Bye {}).unwrap(),
+        "{\"bye\":{}}"
+    );
+    assert_eq!(
+        serde_json::to_string(&Frame::Ping {}).unwrap(),
+        "{\"ping\":{}}"
+    );
+    assert!(
+        wire(
+            b"{\"hello\":{\"proto\":1,\"id\":\"x\",\"role\":\"master\"}}\n",
+            false
+        )
+        .is_err()
+    );
+    assert!(
+        wire(
+            b"{\"type\":\"hello\",\"proto\":1,\"id\":\"x\",\"host\":\"h\",\"role\":\"master\"}\n",
+            false
+        )
+        .is_err()
+    );
+}
+#[test]
+fn cleanup_hook_and_panic_unlink_registrations() {
+    let dir = dir();
+    let peer = Peer::start_in(dir.clone(), vec![]).unwrap();
+    let path = socket(&dir, peer.id()).unwrap();
+    let json = dir.join(format!("{}.json", peer.id()));
+    peer.cleanup_hook()();
+    let until = Instant::now() + Duration::from_secs(2);
+    while path.exists() || json.exists() {
+        assert!(Instant::now() < until);
+        thread::sleep(Duration::from_millis(10));
+    }
+    drop(peer);
+    let paths = Arc::new(Mutex::new(None));
+    let capture = paths.clone();
+    assert!(
+        std::panic::catch_unwind(move || {
+            let peer = Peer::start_in(dir.clone(), vec![]).unwrap();
+            *capture.lock().unwrap() = Some((dir.clone(), peer.id().to_owned()));
+            panic!("exercise peer unwinding");
+        })
+        .is_err()
+    );
+    let (dir, id) = paths.lock().unwrap().clone().unwrap();
+    assert!(!socket(&dir, &id).unwrap().exists());
+    assert!(!dir.join(format!("{id}.json")).exists());
+    fs::remove_dir_all(dir).unwrap();
+}
+#[test]
 fn timeout_applies_to_handshake_and_bound_connections() {
     for ready in [false, true] {
         let (a, _b) = UnixStream::pair().unwrap();
-        let mut link = Link::new(a, None, Role::Master, "local").unwrap();
+        let mut link = Link::new(a, None, Role::Master, "local", "host").unwrap();
         link.ready = ready;
         link.last = Instant::now() - TIMEOUT;
         assert!(link.poll().unwrap_err().to_string().contains("timed out"));
@@ -76,17 +136,19 @@ fn registration_modes_stale_cleanup_and_path_guard() {
     metadata(&dir, &stale).unwrap();
     let stale_socket = socket(&dir, &stale.id).unwrap();
     let listener = UnixListener::bind(&stale_socket).unwrap();
-    // A connectable socket is retained even if the PID is gone.
-    assert_eq!(list_in(&dir).unwrap().len(), 2);
-    drop(listener);
-    // Missing endpoints are definitively stale on all Unix platforms.
-    fs::remove_file(&stale_socket).unwrap();
+    // A dead PID is removed even while its endpoint is connectable.
     assert_eq!(list_in(&dir).unwrap().len(), 1);
     assert!(!stale_socket.exists());
-    // A living PID is retained even if its socket is missing.
+    drop(listener);
+    // A dead endpoint must also be removed on Darwin, where refusal alone is ambiguous.
+    metadata(&dir, &stale).unwrap();
+    drop(UnixListener::bind(&stale_socket).unwrap());
+    assert_eq!(list_in(&dir).unwrap().len(), 1);
+    assert!(!stale_socket.exists());
+    // Missing endpoints are stale even when the PID is alive.
     stale.pid = std::process::id();
     metadata(&dir, &stale).unwrap();
-    assert_eq!(list_in(&dir).unwrap().len(), 2);
+    assert_eq!(list_in(&dir).unwrap().len(), 1);
     assert!(socket(Path::new(&"x".repeat(104)), "a").is_err());
     assert!(socket(&dir, "../bad").is_err());
     drop(peer);
@@ -122,7 +184,7 @@ fn transport_drop_cancels_blocked_bridges_and_reaps_child() {
 #[test]
 fn random_ids_and_conservative_stale_errors() {
     let a = random_id().unwrap();
-    assert_eq!(a.len(), 32);
+    assert_eq!(a.len(), 8);
     assert!(a.bytes().all(|b| b.is_ascii_hexdigit()));
     assert_ne!(a, random_id().unwrap());
     for code in [
@@ -166,7 +228,7 @@ fn full_backlog_is_bounded_and_retained() {
     let instance = Instance {
         id: "full".into(),
         host: "test".into(),
-        pid: i32::MAX as u32,
+        pid: std::process::id(),
         roots: vec![],
         started: 0,
         role: Role::Unbound,
@@ -185,8 +247,8 @@ fn full_backlog_is_bounded_and_retained() {
 #[test]
 fn heartbeat_keeps_real_pair_alive_beyond_timeout() {
     let (a, b) = UnixStream::pair().unwrap();
-    let mut master = Link::new(a, None, Role::Master, "a").unwrap();
-    let mut slave = Link::new(b, None, Role::Slave, "b").unwrap();
+    let mut master = Link::new(a, None, Role::Master, "a", "host").unwrap();
+    let mut slave = Link::new(b, None, Role::Slave, "b", "host").unwrap();
     let start = Instant::now();
     while start.elapsed() < TIMEOUT + Duration::from_secs(1) {
         master.poll().unwrap();
