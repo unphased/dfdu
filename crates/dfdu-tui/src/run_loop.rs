@@ -181,6 +181,25 @@ where
     // The first frame is drawn at once.
     let mut input_dirty = true;
     let mut on_select = OnSelect::new(std::env::var_os("DFDU_ON_SELECT"));
+    let listener = if let Some(addr) = std::env::var_os("DFDU_LISTEN") {
+        let result = std::env::var("DFDU_PEER_KEY")
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "DFDU_PEER_KEY is required"))
+            .and_then(|key| crate::peer::Listener::bind(&addr.to_string_lossy(), key));
+        match result {
+            Ok(listener) => Some(listener),
+            Err(e) => {
+                session.front_mut().session.status = Some(format!("peer listener: {e}"));
+                None
+            }
+        }
+    } else {
+        None
+    };
+    let peer_requests = listener
+        .as_ref()
+        .map_or_else(crossbeam_channel::never, |listener| {
+            listener.requests().clone()
+        });
     loop {
         let now = Instant::now();
         let tick = session.tick(now)?;
@@ -244,6 +263,10 @@ where
                 Ok(_) => {}
                 // The input thread ended (terminal closed): leave.
                 Err(_) => return Ok(None),
+            },
+            recv(peer_requests) -> request => if let Ok(request) = request {
+                let _ = request.command;
+                let _ = request.reply.send(serde_json::json!({"error": "unsupported command"}));
             },
             recv(changes) -> _ => session.note_change(),
             default(wake) => {}
