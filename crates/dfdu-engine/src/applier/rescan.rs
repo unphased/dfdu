@@ -162,13 +162,13 @@ fn rescan_owner(tree: &Tree, ix: Ix, enter: bool) -> Result<u32, NotRescanned> {
 }
 
 impl<B: Backend> Applier<B> {
-    /// Adds `entered` (a mount root's device and inode) to the mounts entered this session,
-    /// and has `opts` enter all of them.
-    fn enter_again(&mut self, opts: &mut JobOptions, entered: Option<(u64, u64)>) {
-        if let Some(at) = entered.filter(|at| !self.entered.contains(at)) {
-            self.entered.push(at);
+    /// Keeps mount overrides with their visible root and applies them to its rescans.
+    fn enter_again(&mut self, root: NodeRef, opts: &mut JobOptions, entered: Option<(u64, u64)>) {
+        let mounts = self.entered.entry(root).or_default();
+        if let Some(at) = entered.filter(|at| !mounts.contains(at)) {
+            mounts.push(at);
         }
-        for &at in &self.entered {
+        for &at in mounts.iter() {
             if !opts.enter.contains(&at) {
                 opts.enter.push(at);
             }
@@ -177,7 +177,7 @@ impl<B: Backend> Applier<B> {
 
     /// Rescans `node` with the options of the job that scanned it, or `given`. With `enter`,
     /// `node` is a mount that was not entered, and is scanned in place: a job's root is read
-    /// whatever filesystem it is on. Every rescan enters the mounts entered so far. A rescan of
+    /// whatever filesystem it is on. Rescans enter mounts entered under the same root. A rescan of
     /// a directory whose parent is still being listed starts when that listing closes.
     pub(super) fn rescan(
         &mut self,
@@ -260,7 +260,11 @@ impl<B: Backend> Applier<B> {
         // Not sent to an agent, which judges against its job's root.
         opts.scope = self.settings.remote.is_none().then(|| m.tree.path_buf(top));
         opts.keep = kept.as_ref().map(|k| Arc::new(k.keep()));
-        self.enter_again(&mut opts, enter.then(|| m.tree.dev_ino(ix)));
+        self.enter_again(
+            m.tree.node_ref(top),
+            &mut opts,
+            enter.then(|| m.tree.dev_ino(ix)),
+        );
         if let Some(c) = opts.class.as_ref().filter(|_| resumed) {
             m.rules = Some(c.rules.clone());
             m.tree.set_protection(shadow, c.protection.root_mark());

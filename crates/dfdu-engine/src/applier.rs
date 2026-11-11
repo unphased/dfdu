@@ -156,7 +156,7 @@ pub struct Applier<B: Backend> {
     retired: HashMap<u32, JobOptions>,
     /// Mounts the user entered this session ([`Command::Enter`]), by the device and inode of
     /// their roots: every rescan enters them again.
-    entered: Vec<(u64, u64)>,
+    entered: HashMap<NodeRef, Vec<(u64, u64)>>,
     next_job: u32,
     links: LinkTable,
     work: VecDeque<Work>,
@@ -217,7 +217,7 @@ impl<B: Backend> Applier<B> {
             settings,
             jobs: BTreeMap::new(),
             retired: HashMap::new(),
-            entered: Vec::new(),
+            entered: HashMap::new(),
             next_job: 1,
             links: LinkTable::default(),
             work: VecDeque::new(),

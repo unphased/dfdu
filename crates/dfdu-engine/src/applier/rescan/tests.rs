@@ -73,14 +73,18 @@ fn what_is_not_rescanned_says_why() {
 #[test]
 fn every_rescan_enters_the_mounts_entered_so_far() {
     let mut r = Rig::scan();
+    let root = NodeRef::from_bits(1);
+    let other = NodeRef::from_bits(2);
     let mut opts = JobOptions::default();
-    r.a.enter_again(&mut opts, Some((1, 2)));
-    r.a.enter_again(&mut opts, Some((1, 2)));
+    r.a.enter_again(root, &mut opts, Some((1, 2)));
+    r.a.enter_again(root, &mut opts, Some((1, 2)));
     assert_eq!(opts.enter, [(1, 2)]);
     let mut opts = JobOptions::default();
-    r.a.enter_again(&mut opts, Some((3, 4)));
+    r.a.enter_again(root, &mut opts, Some((3, 4)));
     assert_eq!(opts.enter, [(1, 2), (3, 4)]);
-    assert_eq!(r.a.entered, [(1, 2), (3, 4)]);
+    let mut other_opts = JobOptions::default();
+    r.a.enter_again(other, &mut other_opts, None);
+    assert!(other_opts.enter.is_empty());
 }
 
 /// Rescans of job 1's directories, other than the first scan.
