@@ -36,15 +36,20 @@ pub(crate) fn pending<B: dfdu_scan::Backend>(session: &mut Session<'_, B, App>) 
 
 fn candidates(tree: &Tree, index: &mut MatchIndex, q: &Query) -> Vec<(HostPath, HostPath)> {
     let parents: Vec<_> = q.parents.iter().map(|p| p.as_bytes()).collect();
+    let mut seen = std::collections::HashSet::new();
     index
         .candidates(tree, q.size, q.name.as_bytes(), &parents)
         .into_iter()
-        .map(|ix| {
+        .filter_map(|ix| {
+            let path = tree.host_path(ix);
+            if !seen.insert(path.clone()) {
+                return None;
+            }
             let mut root = ix;
             while let Some(parent) = tree.parent(root) {
                 root = parent;
             }
-            (tree.host_path(ix), tree.host_path(root))
+            Some((path, tree.host_path(root)))
         })
         .collect()
 }
@@ -299,6 +304,47 @@ mod tests {
         assert!(matches!(session.front().overlay, crate::app::Overlay::None));
         let _ = session.tick(now).unwrap();
         assert_eq!(command(&mut session, json!({"state":null}))["path"], a_file);
+        drop(session);
+        engine.shutdown(Duration::from_millis(200));
+    }
+
+    #[test]
+    fn overlapping_roots_cycle_unique_paths() {
+        use dfdu_engine::test_support::meta;
+        use dfdu_tree::Kind;
+
+        let mut tree = Tree::new();
+        let root = tree.new_root(b"/r", &meta(Kind::Dir, 0, 1), true);
+        let sub = tree.add_dir(root, b"sub", &meta(Kind::Dir, 0, 2));
+        tree.add_file(sub, b"file", &meta(Kind::File, 3, 3), true, None);
+        let other = tree.add_dir(root, b"other", &meta(Kind::Dir, 0, 4));
+        tree.add_file(other, b"file", &meta(Kind::File, 3, 5), true, None);
+        let sub_path = tree.host_path(sub);
+        let duplicate = tree.new_root(sub_path.as_bytes(), &meta(Kind::Dir, 0, 2), true);
+        tree.add_file(duplicate, b"file", &meta(Kind::File, 3, 3), true, None);
+        let a = sub_path.join(b"file").display().to_string();
+        let b = tree.host_path(other).join(b"file").display().to_string();
+        let engine = Engine::start(PortableBackend::default(), EngineOptions::default());
+        engine.load(tree);
+        let now = Instant::now();
+        let mut session = Session::over(
+            &engine,
+            App::new(Theme::no_color(), now),
+            SessionOptions::default(),
+        );
+        let _ = session.tick(now).unwrap();
+        let first = command(
+            &mut session,
+            json!({"match":{"size":3,"name":"file","parents":["sub"]}}),
+        );
+        assert_eq!(first, json!({"ok":true,"path":a,"matches":2,"rank":1}));
+        let second = command(&mut session, json!({"next":null}));
+        assert_eq!(second, json!({"ok":true,"path":b,"matches":2,"rank":2}));
+        assert_eq!(command(&mut session, json!({"next":null})), first);
+        assert_eq!(command(&mut session, json!({"prev":null})), second);
+        let _ = session.tick(now).unwrap();
+        assert_eq!(command(&mut session, json!({"state":null}))["matches"], 2);
+        assert_eq!(command(&mut session, json!({"state":null}))["rank"], 2);
         drop(session);
         engine.shutdown(Duration::from_millis(200));
     }
