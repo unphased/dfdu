@@ -1,10 +1,9 @@
 ---
 source: crates/dfdu-tui/src/overlay/palette.rs
-assertion_line: 321
 expression: frame
 ---
  dfdu │ 1 Files │ 2 Map │ 3 Cleanup │ 4 Duplicates │ 5 Largest                     ⠋ scanning 00:00
- /r         ┌ Commands 66/66 ──────────────────────────────────────────────────────────┐ze ↓ · disk
+ /r         ┌ Commands 67/67 ──────────────────────────────────────────────────────────┐ze ↓ · disk
         size│ : ▌                                                                      │
      3.0 GiB│ move up                                                    navigate  ↑ k │
    625.0 MiB│ move down                                                  navigate  ↓ j │
@@ -18,6 +17,7 @@ expression: frame
             │ open directory, even in tree mode                        navigate  Enter │
             │ parent directory (tree mode: collapse)         navigate  ← h Backspace < │
             │ go to folder…                                           navigate  Ctrl-G │
+            │ bind / unbind peer (TARGET)                                    global  B │
             │ sort by size (again: reverse)                                    sort  s │
             │ sort by name (again: reverse)                                    sort  n │
             │ sort by items (again: reverse)                                   sort  C │

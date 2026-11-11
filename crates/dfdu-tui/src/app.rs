@@ -54,6 +54,10 @@ pub enum Overlay {
 }
 
 pub struct App {
+    #[cfg(unix)]
+    pub peer: Option<crate::PeerOptions>,
+    #[cfg(unix)]
+    pub peer_prompt: Option<crate::input::line::LineInput>,
     pub theme: Theme,
     /// The terminal's colour level, which a theme chosen in the palette is resolved for. It
     /// can differ from the theme's own level: `mono` resolves without colours on any terminal.
@@ -95,6 +99,10 @@ impl App {
     #[must_use]
     pub fn new(theme: Theme, now: Instant) -> Self {
         App {
+            #[cfg(unix)]
+            peer: None,
+            #[cfg(unix)]
+            peer_prompt: None,
             color_level: theme.level(),
             background: theme.background(),
             theme,
@@ -129,6 +137,10 @@ impl App {
             background: ui.background,
             ..App::new(ui.theme.clone(), now)
         };
+        #[cfg(unix)]
+        {
+            app.peer.clone_from(&ui.peer);
+        }
         let s = &mut app.session;
         s.home.clone_from(&ui.home);
         s.types = ui.types.clone();
@@ -191,6 +203,10 @@ impl App {
     ) -> Vec<Effect> {
         if k.modifiers.contains(KeyModifiers::CONTROL) && k.code == KeyCode::Char('c') {
             self.quit = true;
+            return Vec::new();
+        }
+        #[cfg(unix)]
+        if crate::peer::key(self, k) {
             return Vec::new();
         }
         if confirm::is_open(self) {

@@ -65,6 +65,8 @@ fn front_end(app: &mut App, a: Action) -> Vec<Effect> {
         Action::Types => type_filter::open(app),
         Action::MarkPattern => mark_pattern::open(app),
         Action::GoTo => goto::open(app),
+        #[cfg(unix)]
+        Action::Peer => crate::peer::open(app),
         Action::FocusDetails => return details::focus(app),
         Action::CopyPath => return selected_path::copy(app).into_iter().collect(),
         _ => {}

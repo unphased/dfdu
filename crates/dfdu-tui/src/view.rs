@@ -135,6 +135,10 @@ pub fn draw(f: &mut Frame, app: &mut App, now: Instant) {
             },
         )),
     };
+    #[cfg(unix)]
+    if let Some(rect) = crate::peer::draw(f, app) {
+        app.areas.overlay = Some(rect);
+    }
     motion::post_process(app, f.buffer_mut(), now);
 }
 

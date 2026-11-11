@@ -42,6 +42,18 @@ pub fn status(f: &mut Frame, app: &App, area: Rect, list_view: bool) {
             .or_else(|| app.session.snap.notice.clone())
             .unwrap_or_default(),
     };
+    #[cfg(unix)]
+    let msg = app.peer.as_ref().map_or_else(
+        || msg.clone(),
+        |p| {
+            let peer = crate::peer::status_text(p.peer.id(), &p.peer.status());
+            if msg.is_empty() {
+                peer
+            } else {
+                format!("{peer} | {msg}")
+            }
+        },
+    );
     if msg.is_empty()
         && list_view
         && matches!(app.overlay, Overlay::None)

@@ -17,6 +17,7 @@ pub enum Action {
     Enter,
     Parent,
     GoTo,
+    Peer,
     SortSize,
     SortName,
     SortItems,
@@ -157,6 +158,12 @@ pub const ACTIONS: &[ActionInfo] = &[
         Group::Navigate,
     ),
     row(Action::GoTo, "Ctrl-G", "go to folder…", Group::Navigate),
+    row(
+        Action::Peer,
+        "B",
+        "bind / unbind peer (TARGET)",
+        Group::Global,
+    ),
     row(
         Action::SortSize,
         "s",

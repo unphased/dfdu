@@ -27,12 +27,12 @@ mod format;
 mod input;
 mod model;
 mod overlay;
+#[cfg(unix)]
+mod peer;
 pub mod preview;
 mod reopen;
 mod run_loop;
 mod setup;
-#[cfg(unix)]
-mod peer;
 mod state;
 mod theme;
 mod view;
@@ -63,7 +63,12 @@ pub use theme::{Bars, BuiltinTheme, ColorLevel, Theme, ThemeError, ThemeFile, pa
 /// How long the terminal gets to answer the background-colour query at start.
 const BACKGROUND_QUERY: Duration = Duration::from_secs(1);
 
+#[cfg(unix)]
+pub use peer::PeerOptions;
+
 pub struct RunOptions {
+    #[cfg(unix)]
+    pub peer: Option<PeerOptions>,
     pub source: Source,
     /// Options of engines the browser starts (all but [`Source::Remote`]'s). Its `read_only`
     /// also tells the browser to leave out the delete keys, for a remote engine as well.
@@ -105,6 +110,8 @@ pub struct Reopen {
     reason = "independent options of the browser, not one state spread over several bools"
 )]
 pub struct UiOptions {
+    #[cfg(unix)]
+    pub peer: Option<PeerOptions>,
     pub theme: Theme,
     /// The terminal's colour level, which a theme chosen in the palette is resolved for.
     pub color_level: ColorLevel,
@@ -147,6 +154,8 @@ impl UiOptions {
     pub fn from_env() -> Self {
         let colors = setup::resolve_theme(&UiSettings::default(), |k| std::env::var_os(k), || None);
         UiOptions {
+            #[cfg(unix)]
+            peer: None,
             theme: colors.theme,
             color_level: colors.level,
             background: colors.background,
@@ -210,6 +219,8 @@ pub fn run(opts: RunOptions) -> io::Result<()> {
         source => source,
     };
     let ui_opts = |setup: Setup, from_file: bool, notice: Option<String>, came_from| UiOptions {
+        #[cfg(unix)]
+        peer: opts.peer.clone(),
         theme: theme.clone(),
         color_level: colors.level,
         background: colors.background,

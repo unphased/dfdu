@@ -28,6 +28,9 @@ tachyonfx.workspace = true
 terminal-colorsaurus.workspace = true
 dunce.workspace = true
 
+[target.'cfg(unix)'.dependencies]
+dfdu-peer = { path = "../dfdu-peer" }
+
 [dev-dependencies]
 dfdu-session = { workspace = true, features = ["test-support"] }
 dfdu-engine = { workspace = true, features = ["test-support"] }

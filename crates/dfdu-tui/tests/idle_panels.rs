@@ -101,6 +101,8 @@ fn settled_with_panels(
         opts: JobOptions::default(),
     });
     let ui = UiOptions {
+        #[cfg(unix)]
+        peer: None,
         theme: Theme::no_color(),
         color_level: ColorLevel::None,
         background: None,

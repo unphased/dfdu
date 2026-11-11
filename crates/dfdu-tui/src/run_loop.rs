@@ -148,6 +148,14 @@ where
 {
     let inject_panic = std::env::var_os("DFDU_TEST_UI_PANIC").is_some();
     let changes = session.changes().clone();
+    #[cfg(unix)]
+    let mut peer_events = session
+        .front()
+        .peer
+        .as_ref()
+        .map_or_else(crossbeam_channel::never, |p| p.peer.events().clone());
+    #[cfg(not(unix))]
+    let peer_events = crossbeam_channel::never::<String>();
     // The first frame is drawn at once.
     let mut input_dirty = true;
     loop {
@@ -202,6 +210,8 @@ where
                     input_dirty = true;
                 }
                 Ok(Event::Mouse(m)) if mouse_on => {
+                    #[cfg(unix)]
+                    if session.front().peer_prompt.is_some() { continue; }
                     if let Some(fx) = mouse::event(session.front_mut(), m, Instant::now()) {
                         handle_effects(session, fx);
                         input_dirty = true;
@@ -217,6 +227,19 @@ where
                     Ok(decoded) => previews.complete(decoded),
                     Err(_) => previews.disable()?,
                 }
+                input_dirty = true;
+            },
+            recv(peer_events) -> event => {
+                #[cfg(unix)]
+                match event {
+                    Ok(dfdu_peer::Event::Error(error)) => {
+                        session.front_mut().session.status = Some(format!("peer: {error}"));
+                    }
+                    Ok(dfdu_peer::Event::Status(_)) => {}
+                    Err(_) => peer_events = crossbeam_channel::never(),
+                }
+                #[cfg(not(unix))]
+                let _ = event;
                 input_dirty = true;
             },
             recv(changes) -> _ => session.note_change(),
