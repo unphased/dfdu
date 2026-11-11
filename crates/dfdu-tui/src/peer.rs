@@ -97,7 +97,7 @@ fn serve(mut stream: TcpStream, key: Option<&str>, requests: &Sender<Request>) {
             break;
         }
         if n > 65536 || !line.ends_with(b"\n") {
-            let _ = send(&mut stream, &json!({"error":"invalid request"}));
+            let _ = send(&mut stream, &json!({"ok":false,"error":"invalid request"}));
             break;
         }
         let parsed = serde_json::from_slice::<Value>(&line);
@@ -110,11 +110,14 @@ fn serve(mut stream: TcpStream, key: Option<&str>, requests: &Sender<Request>) {
                 authenticated = true;
                 continue;
             }
-            let _ = send(&mut stream, &json!({"error":"authentication failed"}));
+            let _ = send(
+                &mut stream,
+                &json!({"ok":false,"error":"authentication failed"}),
+            );
             break;
         }
         let Ok(Value::Object(object)) = parsed else {
-            if send(&mut stream, &json!({"error":"invalid JSON"})).is_err() {
+            if send(&mut stream, &json!({"ok":false,"error":"invalid JSON"})).is_err() {
                 break;
             }
             continue;

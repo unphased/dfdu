@@ -66,16 +66,16 @@ fn cycle<B: dfdu_scan::Backend>(session: &mut Session<'_, B, App>, direction: is
     let Some(query) = &peer.query else {
         session.front_mut().session.status = Some("no peer matches".into());
         session.front_mut().peer = peer;
-        return json!({"error":"no matches"});
+        return json!({"ok":false,"error":"no matches"});
     };
     let matches = session
         .engine()
         .read(|m| candidates(&m.tree, &mut peer.index, query));
     if matches.is_empty() {
         peer.current = None;
-        session.front_mut().session.status = Some("0 matches".into());
+        session.front_mut().session.status = Some(format!("no match for {}", query.name));
         session.front_mut().peer = peer;
-        return json!({"count":0});
+        return json!({"ok":true,"matches":0});
     }
     let at = peer
         .current
@@ -91,7 +91,7 @@ fn cycle<B: dfdu_scan::Backend>(session: &mut Session<'_, B, App>, direction: is
     show(app, path.clone(), root);
     app.session.status = Some(format!("{}/{} matches", at + 1, matches.len()));
     app.peer = peer;
-    json!({"path":path.display().to_string(),"index":at + 1,"count":matches.len()})
+    json!({"ok":true,"path":path.display().to_string(),"rank":at + 1,"matches":matches.len()})
 }
 
 pub(crate) fn command<B: dfdu_scan::Backend>(
@@ -99,31 +99,31 @@ pub(crate) fn command<B: dfdu_scan::Backend>(
     command: Value,
 ) -> Value {
     let Some(object) = command.as_object() else {
-        return json!({"error":"invalid command"});
+        return json!({"ok":false,"error":"invalid command"});
     };
     if object.len() != 1 {
-        return json!({"error":"invalid command"});
+        return json!({"ok":false,"error":"invalid command"});
     }
     let Some((name, value)) = object.iter().next() else {
-        return json!({"error":"invalid command"});
+        return json!({"ok":false,"error":"invalid command"});
     };
     match name.as_str() {
         "match" => {
             let Some(size) = value.get("size").and_then(Value::as_u64) else {
-                return json!({"error":"invalid match size"});
+                return json!({"ok":false,"error":"invalid match size"});
             };
             let Some(name) = value.get("name").and_then(Value::as_str) else {
-                return json!({"error":"invalid match name"});
+                return json!({"ok":false,"error":"invalid match name"});
             };
             let Some(parents) = value.get("parents").and_then(Value::as_array) else {
-                return json!({"error":"invalid match parents"});
+                return json!({"ok":false,"error":"invalid match parents"});
             };
             let Some(parents) = parents
                 .iter()
                 .map(|p| p.as_str().map(str::to_owned))
                 .collect::<Option<Vec<_>>>()
             else {
-                return json!({"error":"invalid match parents"});
+                return json!({"ok":false,"error":"invalid match parents"});
             };
             let peer = &mut session.front_mut().peer;
             peer.query = Some(Query {
@@ -141,7 +141,7 @@ pub(crate) fn command<B: dfdu_scan::Backend>(
                 .as_str()
                 .or_else(|| value.get("path").and_then(Value::as_str))
             else {
-                return json!({"error":"invalid path"});
+                return json!({"ok":false,"error":"invalid path"});
             };
             let found = session.engine().read(|m| {
                 let path = HostPath::new(m.tree.host(), text.as_bytes().to_vec());
@@ -153,24 +153,36 @@ pub(crate) fn command<B: dfdu_scan::Backend>(
                 Some((path, m.tree.host_path(root)))
             });
             let Some((path, root)) = found else {
-                return json!({"error":"path not found"});
+                return json!({"ok":false,"error":"path not found"});
             };
             if path == root {
-                return json!({"error":"cannot select root"});
+                return json!({"ok":false,"error":"cannot select root"});
             }
             let app = session.front_mut();
             app.peer.query = None;
             app.peer.current = None;
             show(app, path.clone(), root);
-            json!({"path":path.display().to_string()})
+            json!({"ok":true,"path":path.display().to_string()})
         }
         "state" => {
             let state = &session.front().session;
             let path =
                 dfdu_session::selected_path::selected(state).map(|(p, _)| p.display().to_string());
-            json!({"path":path})
+            let mut peer = std::mem::take(&mut session.front_mut().peer);
+            let matches = peer.query.as_ref().map_or_else(Vec::new, |query| {
+                session
+                    .engine()
+                    .read(|m| candidates(&m.tree, &mut peer.index, query))
+            });
+            let rank = peer
+                .current
+                .as_ref()
+                .and_then(|current| matches.iter().position(|(path, _)| path == current))
+                .map_or(0, |i| i + 1);
+            session.front_mut().peer = peer;
+            json!({"ok":true,"path":path,"matches":matches.len(),"rank":rank})
         }
-        _ => json!({"error":"unsupported command"}),
+        _ => json!({"ok":false,"error":"unsupported command"}),
     }
 }
 
@@ -250,16 +262,35 @@ mod tests {
             SessionOptions::default(),
         );
         let _ = session.tick(now).unwrap();
+        let initial_path = dfdu_session::selected_path::selected(&session.front().session)
+            .map(|(path, _)| path.display().to_string());
+        assert_eq!(
+            command(&mut session, json!({"state":null})),
+            json!({"ok":true,"path":initial_path,"matches":0,"rank":0})
+        );
+        assert_eq!(
+            command(&mut session, json!({"prev":null})),
+            json!({"ok":false,"error":"no matches"})
+        );
         let reply = command(
             &mut session,
             json!({"match":{"size":3,"name":"file","parents":["a"]}}),
         );
-        assert_eq!(reply["count"], 2);
-        assert_eq!(reply["index"], 1);
+        let a = HostPath::from(dir.path())
+            .join(b"a")
+            .join(b"file")
+            .display()
+            .to_string();
+        let b = HostPath::from(dir.path())
+            .join(b"b")
+            .join(b"file")
+            .display()
+            .to_string();
+        assert_eq!(reply, json!({"ok":true,"path":a,"matches":2,"rank":1}));
         let _ = session.tick(now).unwrap();
         assert_eq!(
-            command(&mut session, json!({"state":null}))["path"],
-            reply["path"]
+            command(&mut session, json!({"state":null})),
+            json!({"ok":true,"path":a,"matches":2,"rank":1})
         );
         assert_eq!(
             reply["path"],
@@ -270,10 +301,11 @@ mod tests {
                 .to_string()
         );
         let next = command(&mut session, json!({"next":null}));
+        assert_eq!(next, json!({"ok":true,"path":b,"matches":2,"rank":2}));
         let _ = session.tick(now).unwrap();
         assert_eq!(
-            command(&mut session, json!({"state":null}))["path"],
-            next["path"]
+            command(&mut session, json!({"state":null})),
+            json!({"ok":true,"path":b,"matches":2,"rank":2})
         );
         assert_eq!(
             next["path"],
@@ -283,17 +315,64 @@ mod tests {
                 .display()
                 .to_string()
         );
+        assert_eq!(command(&mut session, json!({"prev":null})), reply);
+        cycle_key(session.front_mut(), 1);
+        pending(&mut session);
+        let _ = session.tick(now).unwrap();
         assert_eq!(
-            command(&mut session, json!({"prev":null}))["path"],
-            reply["path"]
+            command(&mut session, json!({"state":null})),
+            json!({"ok":true,"path":b,"matches":2,"rank":2})
+        );
+        cycle_key(session.front_mut(), -1);
+        pending(&mut session);
+        let _ = session.tick(now).unwrap();
+        assert_eq!(
+            command(&mut session, json!({"state":null})),
+            json!({"ok":true,"path":a,"matches":2,"rank":1})
         );
         assert_eq!(
-            command(&mut session, json!({"goto":"missing"}))["error"],
-            "path not found"
+            command(&mut session, json!({"goto":"missing"})),
+            json!({"ok":false,"error":"path not found"})
         );
         assert_eq!(
-            command(&mut session, json!({"match":{"size":0}}))["error"],
-            "invalid match name"
+            command(&mut session, json!({"match":{"size":0}})),
+            json!({"ok":false,"error":"invalid match name"})
+        );
+        assert_eq!(
+            command(&mut session, json!({"unknown":null})),
+            json!({"ok":false,"error":"unsupported command"})
+        );
+        assert_eq!(
+            command(
+                &mut session,
+                json!({"match":{"size":999,"name":"absent","parents":[]}})
+            ),
+            json!({"ok":true,"matches":0})
+        );
+        assert_eq!(
+            session.front().session.status.as_deref(),
+            Some("no match for absent")
+        );
+        assert_eq!(
+            command(&mut session, json!({"next":null})),
+            json!({"ok":true,"matches":0})
+        );
+        assert_eq!(
+            command(&mut session, json!({"state":null})),
+            json!({"ok":true,"path":a,"matches":0,"rank":0})
+        );
+        assert_eq!(
+            command(&mut session, json!({"goto":a})),
+            json!({"ok":true,"path":a})
+        );
+        let _ = session.tick(now).unwrap();
+        assert_eq!(
+            command(&mut session, json!({"state":null})),
+            json!({"ok":true,"path":a,"matches":0,"rank":0})
+        );
+        assert_eq!(
+            command(&mut session, json!({"next":null})),
+            json!({"ok":false,"error":"no matches"})
         );
         drop(session);
         engine.shutdown(Duration::from_millis(200));

@@ -36,8 +36,15 @@ fn separate_authentication_allows_multiple_independent_requests() {
     let (mut stream, mut reader) = connect(&listener);
     writeln!(stream, "{}", json!({"key":"secret"})).unwrap();
     stream.write_all(b"{\"state\":{}}\n").unwrap();
-    dispatch(&listener, json!({"state":{}}), json!({"count":1}));
-    assert_eq!(response(&mut reader), json!({"count":1}));
+    dispatch(
+        &listener,
+        json!({"state":{}}),
+        json!({"ok":true,"path":null,"matches":0,"rank":0}),
+    );
+    assert_eq!(
+        response(&mut reader),
+        json!({"ok":true,"path":null,"matches":0,"rank":0})
+    );
     writeln!(
         stream,
         "{}",
@@ -47,9 +54,12 @@ fn separate_authentication_allows_multiple_independent_requests() {
     dispatch(
         &listener,
         json!({"key":"ordinary field", "match":{"size":42}}),
-        json!({"rank":1}),
+        json!({"ok":true,"path":"/file","matches":1,"rank":1}),
     );
-    assert_eq!(response(&mut reader), json!({"rank":1}));
+    assert_eq!(
+        response(&mut reader),
+        json!({"ok":true,"path":"/file","matches":1,"rank":1})
+    );
 }
 
 #[test]
@@ -57,7 +67,10 @@ fn no_key_allows_requests_and_recovers_from_bad_json() {
     let listener = Listener::bind("127.0.0.1:0", None).unwrap();
     let (mut stream, mut reader) = connect(&listener);
     writeln!(stream, "not json").unwrap();
-    assert_eq!(response(&mut reader), json!({"error":"invalid JSON"}));
+    assert_eq!(
+        response(&mut reader),
+        json!({"ok":false,"error":"invalid JSON"})
+    );
     stream.write_all(b"{\"state\":{}}\n").unwrap();
     dispatch(&listener, json!({"state":{}}), json!({"ok":true}));
     assert_eq!(response(&mut reader), json!({"ok":true}));
@@ -76,7 +89,7 @@ fn bad_authentication_is_rejected_without_dispatch() {
         writeln!(stream, "{text}").unwrap();
         assert_eq!(
             response(&mut reader),
-            json!({"error":"authentication failed"})
+            json!({"ok":false,"error":"authentication failed"})
         );
         let mut line = String::new();
         assert_eq!(reader.read_line(&mut line).unwrap(), 0);
