@@ -7,6 +7,8 @@ fn selection_follows_and_sampled_match_returns_through_both_loops() {
     let backup = tempfile::tempdir().unwrap();
     std::fs::write(source.path().join("photo.bin"), b"identical photo bytes").unwrap();
     std::fs::write(backup.path().join("photo.bin"), b"identical photo bytes").unwrap();
+    std::fs::write(source.path().join("z-photo.bin"), b"identical photo bytes").unwrap();
+    std::fs::write(backup.path().join("z-photo.bin"), b"identical photo bytes").unwrap();
     let source = dunce::canonicalize(source.path()).unwrap();
     let backup = dunce::canonicalize(backup.path()).unwrap();
     let master = Arc::new(dfdu_peer::Peer::start(Vec::new()).unwrap());
@@ -24,14 +26,35 @@ fn selection_follows_and_sampled_match_returns_through_both_loops() {
     std::thread::scope(|scope| {
         let master_run = scope.spawn(|| exercise(master, &source, master_input, true));
         let slave_run = scope.spawn(|| exercise(slave, &backup, slave_input, false));
-        std::thread::sleep(Duration::from_secs(2));
+        std::thread::sleep(Duration::from_millis(500));
+        for event in [
+            key('C'),
+            key('j'),
+            Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+            Event::Key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+        ] {
+            slave_tx.send(event).unwrap();
+        }
+        master_tx.send(key('j')).unwrap();
+        std::thread::sleep(Duration::from_millis(500));
+        master_tx.send(key('k')).unwrap();
+        std::thread::sleep(Duration::from_secs(1));
         master_tx.send(quit()).unwrap();
         slave_tx.send(quit()).unwrap();
-        let (master_footer, _, _) = master_run.join().unwrap();
-        let (_, selected, panel) = slave_run.join().unwrap();
+        let (master_footer, master_selected, _, seq) = master_run.join().unwrap();
+        let (_, selected, panel, _) = slave_run.join().unwrap();
+        assert!(
+            seq >= 3,
+            "initial selection and two local moves must send nav"
+        );
+        assert_eq!(
+            master_selected,
+            source.join("photo.bin").display().to_string()
+        );
         assert!(master_footer.contains('✓'), "{master_footer}");
         assert_eq!(selected, backup.join("photo.bin").display().to_string());
         assert!(panel.contains("photo.bin"));
+        assert!(panel.contains("z-photo.bin"));
         assert!(panel.contains('✓'));
         assert!(panel.contains("21"));
     });
@@ -42,7 +65,7 @@ fn exercise(
     root: &std::path::Path,
     input: crossbeam_channel::Receiver<Event>,
     master: bool,
-) -> (String, String, String) {
+) -> (String, String, String, u64) {
     let engine = Engine::start(PortableBackend::default(), EngineOptions::default());
     engine.send(Command::Scan {
         path: root.into(),
@@ -50,6 +73,7 @@ fn exercise(
     });
     engine.wait_idle(Some(Duration::from_secs(5)));
     let mut ui = UiOptions::from_env();
+    ui.local = true;
     ui.peer = Some(crate::PeerOptions {
         peer,
         remote_bin: dfdu_peer::DEFAULT_REMOTE_BIN.into(),
@@ -85,8 +109,9 @@ fn exercise(
         .to_string();
     let footer = session.front().nav.footer.clone();
     let panel = String::from_utf8_lossy(&output.lock().unwrap()).into_owned();
+    let seq = session.front().nav.seq;
     session.shutdown(Duration::ZERO);
-    (footer, selected, panel)
+    (footer, selected, panel, seq)
 }
 
 struct Capture(Arc<Mutex<Vec<u8>>>);

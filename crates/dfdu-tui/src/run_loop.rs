@@ -225,7 +225,10 @@ where
                 Ok(Event::Key(k)) => {
                     assert!(!inject_panic, "injected UI panic");
                     #[cfg(unix)]
-                    if session.front().nav.focus || (k.code == ratatui::crossterm::event::KeyCode::Char('C') && !session.front().nav.candidates.is_empty()) {
+                    if session.front().nav.focus || (k.code == ratatui::crossterm::event::KeyCode::Char('C') && !session.front().nav.candidates.is_empty()
+                        && matches!(session.front().overlay, crate::app::Overlay::None)
+                        && session.front().peer_prompt.is_none() && session.front().peer_panel.is_none()) {
+                        if k.kind == ratatui::crossterm::event::KeyEventKind::Release { continue; }
                         use ratatui::crossterm::event::KeyCode;
                         let s = &mut session.front_mut().nav;
                         match k.code {
@@ -254,6 +257,7 @@ where
                 Ok(Event::Mouse(m)) if mouse_on => {
                     #[cfg(unix)]
                     if session.front().peer_prompt.is_some() || session.front().peer_panel.is_some() { continue; }
+                    if session.front().areas.candidates.is_some_and(|r| r.contains((m.column, m.row).into())) { continue; }
                     if let Some(fx) = mouse::event(session.front_mut(), m, Instant::now()) {
                         handle_effects(session, fx);
                         input_dirty = true;

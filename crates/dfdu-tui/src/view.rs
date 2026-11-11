@@ -37,6 +37,7 @@ pub struct Areas {
     /// First cell after the selected row's rendered name and notes, with a one-cell gap.
     pub preview_anchor: Option<(u16, u16)>,
     pub details: Option<Rect>,
+    pub candidates: Option<Rect>,
     /// The open overlay.
     pub overlay: Option<Rect>,
     /// The debug panel, over the list.
@@ -58,9 +59,14 @@ pub fn draw(f: &mut Frame, app: &mut App, now: Instant) {
     let area = f.area();
     let stalled_line = u16::from(app.session.snap.stalled > 0);
     let filter_line = filter::line(app);
-    let [header, body, prompt, filter_row, status, footer] = Layout::vertical([
+    #[cfg(unix)]
+    let candidate_height = crate::peer::nav::panel_height(app, area.height);
+    #[cfg(not(unix))]
+    let candidate_height = 0;
+    let [header, body, candidates, prompt, filter_row, status, footer] = Layout::vertical([
         Constraint::Length(2),
         Constraint::Min(1),
+        Constraint::Length(candidate_height),
         Constraint::Length(stalled_line),
         Constraint::Length(u16::from(filter_line.is_some())),
         Constraint::Length(1),
@@ -82,6 +88,7 @@ pub fn draw(f: &mut Frame, app: &mut App, now: Instant) {
     app.areas = Areas {
         list,
         details: pane,
+        candidates: (candidate_height > 0).then_some(candidates),
         preview_anchor: None,
         overlay: None,
         debug: None,
@@ -109,7 +116,7 @@ pub fn draw(f: &mut Frame, app: &mut App, now: Instant) {
     footer::status(f, app, status, list_view);
     footer::hints(f, app, footer);
     #[cfg(unix)]
-    crate::peer::nav::draw(f, app);
+    crate::peer::nav::draw(f, app, candidates);
 
     if let Some(pane) = pane {
         if crate::features::marks_pane::is_open(app) {

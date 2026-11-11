@@ -24,23 +24,67 @@ mod tests {
     fn candidate_panel_is_docked_and_hidden_when_unbound() {
         let master = dfdu_peer::Peer::start(Vec::new()).unwrap();
         let slave = std::sync::Arc::new(dfdu_peer::Peer::start(Vec::new()).unwrap());
-        let mut app = crate::app::App::new(crate::theme::Theme::default(), std::time::Instant::now());
-        app.peer = Some(crate::PeerOptions { peer: slave.clone(), remote_bin: String::new() });
+        let mut app = crate::app::App::new(
+            crate::theme::Theme::builtin(
+                crate::theme::BuiltinTheme::Dark,
+                crate::theme::ColorLevel::TrueColor,
+                None,
+            ),
+            std::time::Instant::now(),
+        );
+        app.peer = Some(crate::PeerOptions {
+            peer: slave.clone(),
+            remote_bin: String::new(),
+        });
         app.nav.size = Some(21);
-        app.nav.candidates.push(Candidate { path: "/backup/photo.bin".into(), size: 21, mtime: 1234 });
+        app.nav.candidates.push(Candidate {
+            path: "/backup/photo.bin".into(),
+            size: 21,
+            mtime: 1234,
+        });
         assert_eq!(panel_height(&app, 24), 0);
-        master.bind(slave.id(), dfdu_peer::DEFAULT_REMOTE_BIN).unwrap();
+        master
+            .bind(slave.id(), dfdu_peer::DEFAULT_REMOTE_BIN)
+            .unwrap();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         while slave.status().role != dfdu_peer::Role::Slave {
             assert!(std::time::Instant::now() < deadline);
             std::thread::sleep(std::time::Duration::from_millis(5));
         }
-        let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(100, 24)).unwrap();
-        terminal.draw(|f| crate::view::draw(f, &mut app, std::time::Instant::now())).unwrap();
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(100, 24)).unwrap();
+        terminal
+            .draw(|f| crate::view::draw(f, &mut app, std::time::Instant::now()))
+            .unwrap();
         let dock = app.areas.candidates.unwrap();
         assert!(app.areas.list.bottom() <= dock.y);
-        let text: String = terminal.backend().buffer().content.iter().map(|c| c.symbol()).collect();
-        for word in ["Candidates", "/backup/photo.bin", "21", "1234", "…"] { assert!(text.contains(word), "missing {word}"); }
+        let text: String = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|c| c.symbol())
+            .collect();
+        for word in ["Candidates", "/backup/photo.bin", "21", "1234", "…"] {
+            assert!(text.contains(word), "missing {word}");
+        }
+        app.nav.seq = 99;
+        app.nav.expected = Some("same".into());
+        let mut runtime = Runtime::new();
+        runtime.generation = 2;
+        runtime.complete(
+            &mut app,
+            (1, "/backup/photo.bin".into(), Some("old".into())),
+        );
+        assert!(
+            app.nav.hashes.is_empty(),
+            "obsolete worker generation must be ignored"
+        );
+        runtime.complete(
+            &mut app,
+            (2, "/backup/photo.bin".into(), Some("same".into())),
+        );
+        assert_eq!(app.nav.verdict(&app.nav.candidates[0]), Verdict::HashMatch);
         app.nav.candidates.clear();
         assert_eq!(panel_height(&app, 24), 0);
     }
@@ -147,7 +191,7 @@ impl Drop for Workers {
     }
 }
 
-pub(crate) fn draw(f: &mut ratatui::Frame, app: &crate::app::App) {
+pub(crate) fn panel_height(app: &crate::app::App, height: u16) -> u16 {
     let s = &app.nav;
     if s.candidates.is_empty()
         || app
@@ -155,22 +199,26 @@ pub(crate) fn draw(f: &mut ratatui::Frame, app: &crate::app::App) {
             .as_ref()
             .is_none_or(|p| p.peer.status().role != dfdu_peer::Role::Slave)
     {
+        return 0;
+    }
+    u16::try_from(s.candidates.len())
+        .unwrap_or(u16::MAX)
+        .saturating_add(2)
+        .min(8)
+        .min(height / 2)
+}
+
+pub(crate) fn draw(f: &mut ratatui::Frame, app: &crate::app::App, rect: ratatui::layout::Rect) {
+    if rect.height == 0 {
         return;
     }
-    let area = f.area();
-    let height = (s.candidates.len() as u16 + 2).min(8).min(area.height / 2);
-    let rect = ratatui::layout::Rect::new(
-        area.x,
-        area.bottom().saturating_sub(height + 2),
-        area.width,
-        height,
-    );
+    let s = &app.nav;
     let lines: Vec<_> = s
         .candidates
         .iter()
         .enumerate()
         .skip(s.cursor.saturating_sub(4))
-        .take(height.saturating_sub(2) as usize)
+        .take(rect.height.saturating_sub(2) as usize)
         .map(|(i, c)| {
             format!(
                 "{} {} {} {} {}",
@@ -203,6 +251,7 @@ pub(crate) struct Runtime {
     version: u64,
     followed: Option<String>,
     local_moved: bool,
+    generation: u64,
 }
 impl Runtime {
     pub fn new() -> Self {
@@ -214,6 +263,7 @@ impl Runtime {
             version: 0,
             followed: None,
             local_moved: false,
+            generation: 0,
         }
     }
     pub fn tick<B: dfdu_scan::Backend>(
@@ -245,13 +295,13 @@ impl Runtime {
                     let mut parents = Vec::new();
                     let mut p = m.tree.parent(ix);
                     while let Some(i) = p {
-                        parents.push(String::from_utf8_lossy(m.tree.name(i)).into_owned());
+                        parents.push(node_name(&m.tree, i));
                         p = m.tree.parent(i);
                     }
                     Some(Nav {
                         seq,
                         path: path.clone(),
-                        name: String::from_utf8_lossy(m.tree.name(ix)).into_owned(),
+                        name: node_name(&m.tree, ix),
                         kind: if dir {
                             dfdu_peer::NavKind::Dir
                         } else {
@@ -264,8 +314,13 @@ impl Runtime {
                 });
                 if let Some(nav) = nav {
                     let _ = peer.send_nav(nav);
+                    self.generation += 1;
                     self.workers
-                        .replace(if dir { vec![] } else { vec![(seq, path)] });
+                        .replace(if dir || !local_files(session.front()) {
+                            vec![]
+                        } else {
+                            vec![(self.generation, path)]
+                        });
                 }
             }
             dfdu_peer::Role::Slave => {
@@ -303,6 +358,7 @@ impl Runtime {
                     seq,
                     ..State::default()
                 };
+                self.generation += 1;
                 self.workers.replace(vec![]);
             }
         }
@@ -339,17 +395,20 @@ impl Runtime {
         } else {
             None
         };
+        self.generation += 1;
+        let local = local_files(session.front());
         let jobs = candidates
             .iter()
-            .filter(|c| c.size == nav.size && nav.kind == dfdu_peer::NavKind::File)
-            .map(|c| (nav.seq, c.path.clone()))
+            .filter(|c| local && c.size == nav.size && nav.kind == dfdu_peer::NavKind::File)
+            .rev()
+            .map(|c| (self.generation, c.path.clone()))
             .collect();
         let best = candidates.first().map(|c| c.path.clone());
         session.front_mut().nav = State {
             seq: nav.seq,
             candidates,
             expected,
-            size: (nav.kind == dfdu_peer::NavKind::File).then_some(nav.size),
+            size: (local && nav.kind == dfdu_peer::NavKind::File).then_some(nav.size),
             ..State::default()
         };
         self.last_nav = Some(nav);
@@ -366,18 +425,18 @@ impl Runtime {
         let Some(peer) = app.peer.as_ref().map(|p| p.peer.clone()) else {
             return;
         };
-        if result.0 != app.nav.seq {
+        if result.0 != self.generation {
             return;
         }
         if peer.status().role == dfdu_peer::Role::Master {
             if let Some(hash) = result.2 {
                 let _ = peer.send_nav_hash(dfdu_peer::NavHash {
-                    seq: result.0,
+                    seq: app.nav.seq,
                     hash,
                 });
             }
         } else {
-            app.nav.complete(result);
+            app.nav.complete((app.nav.seq, result.1, result.2));
             publish(app);
         }
     }
@@ -405,4 +464,16 @@ pub(crate) fn jump<B: dfdu_scan::Backend>(
 ) {
     let gone = session.go_to_path(path);
     let _ = crate::overlay::goto::gone_to(session.front_mut(), gone);
+}
+
+fn local_files(app: &crate::app::App) -> bool {
+    app.session.outside.local && app.session.from_file.is_none()
+}
+fn node_name(tree: &dfdu_tree::Tree, ix: dfdu_tree::Ix) -> String {
+    if tree.parent(ix).is_none() {
+        let path = tree.host_path(ix);
+        String::from_utf8_lossy(path.file_name().unwrap_or(tree.name(ix))).into_owned()
+    } else {
+        String::from_utf8_lossy(tree.name(ix)).into_owned()
+    }
 }
