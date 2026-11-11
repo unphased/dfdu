@@ -102,17 +102,28 @@ pub(crate) fn duplicate_candidates(tree: &dfdu_tree::Tree) -> Vec<dfdu_dupes::Ca
     let mut paths = HashSet::new();
     let mut inodes = HashMap::new();
     let mut out: Vec<dfdu_dupes::Candidate> = Vec::new();
-    for root in tree.roots() {
+    // Match find_path's preference for the most specific root, preserving root order on ties.
+    let mut roots: Vec<_> = tree.roots().collect();
+    roots.sort_by_cached_key(|&root| {
+        let path = tree.host_path(root);
+        std::cmp::Reverse(
+            path.as_bytes()
+                .split(|&b| path.host().is_sep(b))
+                .filter(|part| !part.is_empty())
+                .count(),
+        )
+    });
+    for root in roots {
         tree.for_each_leaf(root, &mut |ix| {
             if tree.kind(ix) != Kind::File {
                 return;
             }
-            let own = tree.own(ix);
-            if own.apparent < dupes::min_size().max(1) {
-                return;
-            }
             let path = tree.path_buf(ix);
             if !paths.insert(path.clone()) {
+                return;
+            }
+            let own = tree.own(ix);
+            if own.apparent < dupes::min_size().max(1) {
                 return;
             }
             let dev_ino = tree.dev_ino(ix);
@@ -153,6 +164,32 @@ mod tests {
     use dfdu_scan::PortableBackend;
 
     use super::*;
+
+    #[test]
+    fn overlapping_roots_use_the_more_specific_metadata() {
+        use dfdu_engine::test_support::meta;
+        use dfdu_tree::Kind;
+
+        let (mut fx, root) = crate::test_support::Fixture::new();
+        let size = 2 * dupes::min_size();
+        let sub = fx.dir(root, "sub");
+        fx.file(sub, "a", size);
+        fx.file(root, "other", size);
+        let overlap = fx.m.tree.new_root(b"/r/sub", &meta(Kind::Dir, 0, 51), true);
+        let mut current = meta(Kind::File, size, 99);
+        current.alloc = size / 2;
+        current.mtime = 123;
+        let file = fx.m.tree.add_file(overlap, b"a", &current, false, None);
+        let candidates = duplicate_candidates(&fx.m.tree);
+        let candidate = candidates
+            .iter()
+            .find(|c| c.path == fx.m.tree.path_buf(file))
+            .unwrap();
+        assert_eq!(candidate.dev_ino, (1, 99));
+        assert_eq!(candidate.alloc, size / 2);
+        assert_eq!(candidate.mtime, 123);
+        assert_eq!(candidate.links, 0);
+    }
 
     #[test]
     fn errors_follow_the_current_root() {
