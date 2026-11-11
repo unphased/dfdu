@@ -198,7 +198,8 @@ mod tests {
         });
         let b = KeyEvent::new(KeyCode::Char('B'), KeyModifiers::NONE);
         app.key(b, Instant::now());
-        assert!(app.peer_prompt.is_some());
+        assert!(app.peer_panel.is_some());
+        app.key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::NONE), Instant::now());
         app.peer_prompt.as_mut().unwrap().set(slave.id());
         app.key(
             KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
@@ -235,8 +236,8 @@ mod tests {
             .iter()
             .map(|c| c.symbol())
             .collect();
-        assert!(text.contains("TARGET"));
-        assert!(text.contains("ID / HOST ID / HOST:ID"));
+        assert!(text.contains("PEERS"));
+        assert!(text.contains("manual"));
         assert!(text.contains(&format!("peer {} unbound", peer.id())));
         assert!(text.contains("other notice"));
         assert!(app.areas.overlay.is_some());
