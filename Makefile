@@ -5,9 +5,9 @@ all:
 
 test:
 	@if cargo nextest --version >/dev/null 2>&1; then \
-		cargo nextest run -p dfdu-session -p dfdu-tui; \
+		cargo nextest run -p dfdu-peer -p dfdu -p dfdu-session -p dfdu-tui; \
 	else \
-		cargo test -p dfdu-session -p dfdu-tui; \
+		cargo test -p dfdu-peer -p dfdu -p dfdu-session -p dfdu-tui; \
 	fi
 
 install:
