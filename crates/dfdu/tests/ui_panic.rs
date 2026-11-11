@@ -314,7 +314,7 @@ fn two_peer_browsers_bind_locally_and_through_fake_ssh() {
             peers.len() == 2 && peers.iter().all(|p| p["role"] == "unbound")
         });
         if remote {
-            master.press(b"B");
+            master.press(b"Bm");
             master.press(target.as_bytes());
             master.press(b"\r");
             wait_until("SSH rebind", Duration::from_secs(5), || {

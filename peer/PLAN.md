@@ -25,7 +25,7 @@ flowchart LR
 
 ## Transport: always ssh
 
-There is no network listener. Each instance in peer mode listens only on a Unix socket that
+Peer transport has no network listener. Each instance in peer mode listens on a Unix socket that
 only you can open (`0600`, in `~/.local/state/dfdu/peers/`, one per instance).
 The directory is `0700`, fixed so a non-interactive ssh shell can find it.
 
@@ -161,7 +161,15 @@ Each phase starts with failing tests in their own commit, then green commits at 
    entries for the next listing. On macOS refused sockets with live PIDs are retained:
    a full live backlog also reports refusal, so deleting it would break the live instance.
    Local and fake-SSH two-instance tests exercise the same connection path.
-3. **Discovery.** UDP probe and beacon, tailnet unicast, the peers panel, manual entry.
+3. **Discovery (complete).** UDP port 47839 (`DFDU_DISCOVERY_PORT` override). One responder
+   per host answers for all live local IDs; other instances retry ownership. Versioned probes
+   carry an instance ID so its own responder ignores them. Beacons contain host, user and IDs
+   only. One-second discovery uses IPv4 LAN broadcast and online tailnet unicast from
+   `tailscale status --json` (`DFDU_TAILSCALE` override). Missing tailscale is silent.
+   `dfdu peers --discover [--json]` lists hints. `B` opens the peers panel; `r` refreshes,
+   Enter selects a host for SSH instance listing or binds an instance, `m` opens manual
+   TARGET entry. Hostname resolution falls back to the beacon source IP. SSH still does
+   authentication and host-key checks. External discovery commands have five-second limits.
 4. **Nav and matching.** Nav events, the candidate list view, parallel sampled hashes,
    re-match after a scan.
 5. **Swap.**

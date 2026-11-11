@@ -196,7 +196,18 @@ where
             .flatten()
             .min()
             .map_or(IDLE, |t| t.saturating_duration_since(now));
+        #[cfg(unix)]
+        let panel_results = crate::peer::results(session.front());
+        #[cfg(not(unix))]
+        let panel_results = crossbeam_channel::never::<()>();
         select! {
+            recv(panel_results) -> result => {
+                #[cfg(unix)]
+                if let Ok(result) = result { crate::peer::complete(session.front_mut(), result); }
+                #[cfg(not(unix))]
+                let _ = result;
+                input_dirty = true;
+            },
             recv(input) -> ev => match ev {
                 Ok(Event::Key(k)) => {
                     assert!(!inject_panic, "injected UI panic");
@@ -211,7 +222,7 @@ where
                 }
                 Ok(Event::Mouse(m)) if mouse_on => {
                     #[cfg(unix)]
-                    if session.front().peer_prompt.is_some() { continue; }
+                    if session.front().peer_prompt.is_some() || session.front().peer_panel.is_some() { continue; }
                     if let Some(fx) = mouse::event(session.front_mut(), m, Instant::now()) {
                         handle_effects(session, fx);
                         input_dirty = true;

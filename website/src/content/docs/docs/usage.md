@@ -35,16 +35,18 @@ Unreadable entries are marked `!` with the reason. Press `!` to list them all.
 ## Peer mode (Unix)
 
 Start two independent browsers with `dfdu --peer PATH`. Each gets a short random ID.
-Press `B` in the browser that should become master, type the other ID, then Enter.
-For another host, type `HOST ID` or `HOST:ID`. Press `B` again on either side to unbind;
-Escape cancels the prompt. The footer shows the local ID when unbound, or the role and
+Press `B` to open the peers panel. Select a local instance or a discovered host with
+Enter. Selecting a host fetches its instances through SSH; Enter then binds an instance.
+Press `r` to refresh or `m` for manual `ID`, `HOST ID` or `HOST:ID` entry.
+Press `B` again on either bound side to unbind; Escape closes the panel or prompt. The footer shows the local ID when unbound, or the role and
 partner's host/ID when bound. A second binder is refused. Connection errors appear in the
-status line. Browsing remains independent: navigation sync, discovery and role swapping
+status line. Browsing remains independent: navigation sync and role swapping
 are not implemented yet. `--bind TARGET` binds at startup and implies `--peer`.
 
 ```sh
 dfdu peers                    # list live instances on this host
 dfdu peers --json             # metadata for scripts
+dfdu peers --discover         # LAN and online tailnet hosts
 dfdu --bind ab12cd34 /backup
 dfdu --bind 'nas ab12cd34' /source
 dfdu --peer --peer-remote-bin /opt/bin/dfdu /source
@@ -57,6 +59,11 @@ hosts. The fixed binary path avoids an unrelated upstream dfdu on the remote PAT
 `--peer-remote-bin` overrides it; the remote shell expands a leading `~/`.
 `DFDU_SSH` can select another ssh executable, mainly for testing. Authentication and
 host-key checks use your normal ssh configuration. There is no TCP listener.
+
+Discovery uses UDP port 47839 (`DFDU_DISCOVERY_PORT` overrides it). Beacons contain only
+host, user and instance IDs. They are hints, not authentication. Probes use LAN broadcast
+and online IPv4 tailnet peers from `tailscale status --json`. Missing tailscale is silent;
+`DFDU_TAILSCALE` overrides its executable. Details and binding always use SSH.
 
 Registrations live in `~/.local/state/dfdu/peers/`, independent of the temporary and XDG
 runtime directories. The directory is owner-only (`0700`), sockets and JSON metadata are
