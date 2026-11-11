@@ -9,16 +9,18 @@ use std::{
     fs::{self, DirBuilder, OpenOptions},
     io::{self, Read, Write},
     net::Shutdown,
+    os::fd::AsFd,
     os::unix::{
         ffi::OsStrExt,
         fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt},
         net::{UnixListener, UnixStream},
+        process::CommandExt,
     },
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::{
         Arc, Mutex,
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, Ordering},
     },
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -27,7 +29,7 @@ use std::{
 pub const DEFAULT_REMOTE_BIN: &str = "~/.local/bin/dfdu";
 const LIMIT: usize = 64 * 1024;
 const TIMEOUT: Duration = Duration::from_secs(10);
-static NEXT: AtomicU64 = AtomicU64::new(0);
+const CONNECT_TIMEOUT: Duration = Duration::from_millis(250);
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -78,6 +80,115 @@ pub struct Peer {
     worker: Option<thread::JoinHandle<()>>,
     dir: PathBuf,
 }
+fn random_id() -> io::Result<String> {
+    let mut bytes = [0u8; 16];
+    fs::File::open("/dev/urandom")?.read_exact(&mut bytes)?;
+    Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
+}
+fn stale_error(e: &io::Error) -> bool {
+    // Darwin also reports ECONNREFUSED for a full live listener backlog.
+    e.raw_os_error() == Some(libc::ENOENT)
+        || (cfg!(target_os = "linux") && e.raw_os_error() == Some(libc::ECONNREFUSED))
+}
+fn nonblocking(fd: &impl AsFd) -> io::Result<()> {
+    let flags = rustix::fs::fcntl_getfl(fd)?;
+    rustix::fs::fcntl_setfl(fd, flags | rustix::fs::OFlags::NONBLOCK)?;
+    Ok(())
+}
+fn connect_local(path: &Path) -> io::Result<UnixStream> {
+    use rustix::net::{AddressFamily, SocketAddrUnix, SocketFlags, SocketType};
+    let address = SocketAddrUnix::new(path)?;
+    #[cfg(not(target_vendor = "apple"))]
+    let flags = SocketFlags::CLOEXEC | SocketFlags::NONBLOCK;
+    #[cfg(target_vendor = "apple")]
+    let flags = SocketFlags::empty();
+    let fd = rustix::net::socket_with(AddressFamily::UNIX, SocketType::STREAM, flags, None)?;
+    // Darwin has no atomic SOCK_CLOEXEC/SOCK_NONBLOCK socket flags.
+    rustix::io::fcntl_setfd(&fd, rustix::io::FdFlags::CLOEXEC)?;
+    let stream = UnixStream::from(fd);
+    nonblocking(&stream)?;
+    let deadline = Instant::now() + CONNECT_TIMEOUT;
+    loop {
+        let e = match rustix::net::connect(&stream, &address) {
+            Ok(()) => return Ok(stream),
+            Err(e) => io::Error::from(e),
+        };
+        match e.raw_os_error() {
+            Some(libc::EISCONN) => return Ok(stream),
+            Some(libc::EINPROGRESS | libc::EALREADY) => {
+                use rustix::event::{PollFd, PollFlags, Timespec, poll};
+                let mut fds = [PollFd::new(&stream, PollFlags::OUT)];
+                let timeout = Timespec {
+                    tv_sec: 0,
+                    tv_nsec: 5_000_000,
+                };
+                match poll(&mut fds, Some(&timeout)) {
+                    Ok(n) if n > 0 => {
+                        if let Some(e) = stream.take_error()? {
+                            return Err(e);
+                        }
+                        return Ok(stream);
+                    }
+                    Ok(_) | Err(rustix::io::Errno::INTR) => {}
+                    Err(e) => return Err(e.into()),
+                }
+            }
+            Some(libc::EAGAIN | libc::EINTR) => thread::sleep(Duration::from_millis(5)),
+            _ => return Err(e),
+        }
+        if Instant::now() >= deadline {
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "peer connect timed out",
+            ));
+        }
+    }
+}
+struct Transport {
+    child: Child,
+    stop: Arc<AtomicBool>,
+    threads: Vec<thread::JoinHandle<()>>,
+}
+impl Drop for Transport {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+        if let Some(pid) = rustix::process::Pid::from_raw(self.child.id() as i32) {
+            let _ = rustix::process::kill_process_group(pid, rustix::process::Signal::KILL);
+        }
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+        for thread in self.threads.drain(..) {
+            let _ = thread.join();
+        }
+    }
+}
+fn pump(mut input: impl Read, mut output: impl Write, stop: Arc<AtomicBool>) {
+    let mut bytes = [0; 8192];
+    while !stop.load(Ordering::Relaxed) {
+        match input.read(&mut bytes) {
+            Ok(0) => break,
+            Ok(n) => {
+                let mut pending = &bytes[..n];
+                while !pending.is_empty() && !stop.load(Ordering::Relaxed) {
+                    match output.write(pending) {
+                        Ok(0) => return,
+                        Ok(n) => pending = &pending[n..],
+                        Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                            thread::sleep(Duration::from_millis(5))
+                        }
+                        Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
+                        Err(_) => return,
+                    }
+                }
+            }
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                thread::sleep(Duration::from_millis(5))
+            }
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
+            Err(_) => break,
+        }
+    }
+}
 fn error(message: impl Into<String>) -> io::Error {
     io::Error::other(message.into())
 }
@@ -123,15 +234,7 @@ impl Peer {
         }
         fs::set_permissions(&dir, fs::Permissions::from_mode(0o700))?;
         let instance = Instance {
-            id: format!(
-                "{:x}-{:x}-{:x}",
-                std::process::id(),
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_nanos(),
-                NEXT.fetch_add(1, Ordering::Relaxed)
-            ),
+            id: random_id()?,
             host: rustix::system::uname()
                 .nodename()
                 .to_string_lossy()
@@ -204,7 +307,8 @@ impl Drop for Peer {
     }
 }
 
-/// List registrations. Delete only entries whose process is gone AND socket refuses connection.
+/// List registrations. Delete only entries whose process is gone and endpoint is definitively stale.
+/// On Darwin, refused connections are retained because a full live backlog also refuses connections.
 pub fn list() -> io::Result<Vec<Instance>> {
     list_in(&directory()?)
 }
@@ -236,7 +340,7 @@ fn list_in(dir: &Path) -> io::Result<Vec<Instance>> {
             || rustix::process::Pid::from_raw(instance.pid as i32).is_none_or(|pid| {
                 rustix::process::test_kill_process(pid) == Err(rustix::io::Errno::SRCH)
             });
-        if dead && UnixStream::connect(&path).is_err() {
+        if dead && connect_local(&path).is_err_and(|e| stale_error(&e)) {
             let _ = fs::remove_file(path);
             let _ = fs::remove_file(entry.path());
         } else {
@@ -272,17 +376,17 @@ fn parse_target(target: &str) -> io::Result<(Option<String>, String)> {
 fn quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
 }
-fn connect(dir: &Path, target: &str, bin: &str) -> io::Result<(UnixStream, Option<Child>)> {
+fn connect(dir: &Path, target: &str, bin: &str) -> io::Result<(UnixStream, Option<Transport>)> {
     let (host, id) = parse_target(target)?;
     let Some(host) = host else {
-        return Ok((UnixStream::connect(socket(dir, &id)?)?, None));
+        return Ok((connect_local(&socket(dir, &id)?)?, None));
     };
     let binary = if let Some(rest) = bin.strip_prefix("~/") {
         format!("\"$HOME\"/{}", quote(rest))
     } else {
         quote(bin)
     };
-    let mut child = Command::new(std::env::var_os("DFDU_SSH").unwrap_or_else(|| "ssh".into()))
+    let child = Command::new(std::env::var_os("DFDU_SSH").unwrap_or_else(|| "ssh".into()))
         .args([
             "-T",
             "-o",
@@ -290,28 +394,39 @@ fn connect(dir: &Path, target: &str, bin: &str) -> io::Result<(UnixStream, Optio
             &host,
             &format!("{binary} peer-attach {}", quote(&id)),
         ])
+        .process_group(0)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()?;
+    let mut transport = Transport {
+        child,
+        stop: Arc::new(AtomicBool::new(false)),
+        threads: vec![],
+    };
     let (stream, bridge) = UnixStream::pair()?;
-    let mut to_child = bridge.try_clone()?;
-    let mut input = child.stdin.take().unwrap();
-    let mut output = child.stdout.take().unwrap();
-    thread::spawn(move || {
-        let _ = io::copy(&mut to_child, &mut input);
-    });
-    thread::spawn(move || {
-        let mut bridge = bridge;
-        let _ = io::copy(&mut output, &mut bridge);
+    let to_child = bridge.try_clone()?;
+    let input = transport.child.stdin.take().unwrap();
+    let output = transport.child.stdout.take().unwrap();
+    nonblocking(&to_child)?;
+    nonblocking(&bridge)?;
+    nonblocking(&input)?;
+    nonblocking(&output)?;
+    let stop = transport.stop.clone();
+    transport
+        .threads
+        .push(thread::spawn(move || pump(to_child, input, stop)));
+    let stop = transport.stop.clone();
+    transport.threads.push(thread::spawn(move || {
+        pump(output, &bridge, stop);
         let _ = bridge.shutdown(Shutdown::Both);
-    });
-    Ok((stream, Some(child)))
+    }));
+    Ok((stream, Some(transport)))
 }
 
 struct Link {
     stream: UnixStream,
-    child: Option<Child>,
+    _child: Option<Transport>,
     input: Vec<u8>,
     output: Vec<u8>,
     last: Instant,
@@ -322,18 +437,13 @@ struct Link {
 impl Drop for Link {
     fn drop(&mut self) {
         let _ = self.stream.shutdown(Shutdown::Both);
-        if let Some(child) = &mut self.child {
-            let _ = child.kill();
-            let _ = child.wait();
-        }
     }
 }
 impl Link {
-    fn new(stream: UnixStream, child: Option<Child>, role: Role, id: &str) -> io::Result<Self> {
-        stream.set_nonblocking(true)?;
+    fn new(stream: UnixStream, child: Option<Transport>, role: Role, id: &str) -> io::Result<Self> {
         let mut link = Self {
             stream,
-            child,
+            _child: child,
             input: vec![],
             output: vec![],
             last: Instant::now(),
@@ -341,6 +451,7 @@ impl Link {
             role,
             ready: false,
         };
+        link.stream.set_nonblocking(true)?;
         link.queue(Frame::Hello {
             proto: 1,
             id: id.into(),
@@ -515,7 +626,8 @@ fn run(
 /// Bridge standard input and output to a registered instance until either side closes.
 /// The stdin reader is detached if the socket closes first; the command should exit afterwards.
 pub fn attach(id: &str) -> io::Result<()> {
-    let mut stream = UnixStream::connect(socket(&directory()?, id)?)?;
+    let mut stream = connect_local(&socket(&directory()?, id)?)?;
+    stream.set_nonblocking(false)?;
     let mut input = stream.try_clone()?;
     thread::spawn(move || {
         let _ = io::copy(&mut io::stdin().lock(), &mut input);
