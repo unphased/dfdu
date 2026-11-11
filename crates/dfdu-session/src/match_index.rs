@@ -135,6 +135,91 @@ mod tests {
     }
 
     #[test]
+    fn ranked_files_union_name_and_size_with_parent_and_mtime_order() {
+        use dfdu_engine::test_support::meta;
+
+        let (mut f, root) = Fixture::new();
+        let a = f.dir(root, "a");
+        let b = f.dir(root, "b");
+        let exact =
+            f.m.tree
+                .add_file(b, b"file", &meta(Kind::File, 10, i64::MIN), true, None);
+        let near =
+            f.m.tree
+                .add_file(a, b"file", &meta(Kind::File, 20, 99), true, None);
+        let far =
+            f.m.tree
+                .add_file(a, b"other", &meta(Kind::File, 10, i64::MAX), true, None);
+        let tied =
+            f.m.tree
+                .add_file(a, b"z", &meta(Kind::File, 10, 99), true, None);
+        f.file(a, "excluded", 30);
+        let mut index = MatchIndex::default();
+        assert_eq!(
+            index.ranked_candidates(&f.m.tree, 10, b"file", &[b"a"], 100, false),
+            vec![exact, near, tied, far]
+        );
+        assert_eq!(
+            index.ranked_candidates(&f.m.tree, 99, b"file", &[], i64::MIN, false),
+            vec![exact, near]
+        );
+    }
+
+    #[test]
+    fn ranked_directories_include_roots_and_match_parent_prefix() {
+        use dfdu_engine::test_support::meta;
+
+        let (mut f, root) = Fixture::new();
+        let a = f.dir(root, "a");
+        let b = f.dir(root, "b");
+        let other = f.dir(b, "photos");
+        let best = f.dir(a, "photos");
+        let scan_root =
+            f.m.tree
+                .new_root(b"/backup/photos", &meta(Kind::Dir, 0, 100), true);
+        f.file(a, "photos", 0);
+        let mut index = MatchIndex::default();
+        let found = index.ranked_candidates(&f.m.tree, 0, b"photos", &[b"a"], 100, true);
+        assert_eq!(found[0], best);
+        assert_eq!(found.len(), 3);
+        assert!(found.contains(&other));
+        assert!(found.contains(&scan_root));
+    }
+
+    #[test]
+    fn ranked_indexes_rebuild_and_clear() {
+        let (mut f, root) = Fixture::new();
+        let first = f.file(root, "file", 7);
+        let old_dir = f.dir(root, "folder");
+        let mut index = MatchIndex::default();
+        assert_eq!(
+            index.ranked_candidates(&f.m.tree, 99, b"file", &[], 0, false),
+            vec![first]
+        );
+        assert_eq!(
+            index.ranked_candidates(&f.m.tree, 0, b"folder", &[], 0, true),
+            vec![old_dir]
+        );
+        f.m.tree.detach(first);
+        f.m.tree.detach(old_dir);
+        let second = f.file(root, "file", 8);
+        let new_dir = f.dir(root, "folder");
+        assert_eq!(
+            index.ranked_candidates(&f.m.tree, 99, b"file", &[], 0, false),
+            vec![second]
+        );
+        assert_eq!(
+            index.ranked_candidates(&f.m.tree, 0, b"folder", &[], 0, true),
+            vec![new_dir]
+        );
+        index.clear();
+        assert_eq!(
+            index.ranked_candidates(&f.m.tree, 99, b"file", &[], 0, false),
+            vec![second]
+        );
+    }
+
+    #[test]
     fn rebuilds_when_tree_changes() {
         let (mut f, root) = Fixture::new();
         let first = f.file(root, "first", 7);
