@@ -182,10 +182,15 @@ impl<B: Backend> Applier<B> {
         }
         self.start_measure(m, walk.root);
         // The loaded tree entered them: so do the rescans whose listings meet them.
+        let mut top = root;
+        while let Some(parent) = m.tree.parent(top) {
+            top = parent;
+        }
+        let entered = self.entered.entry(m.tree.node_ref(top)).or_default();
         for &ix in &mounts {
             let at = m.tree.dev_ino(ix);
-            if !self.entered.contains(&at) {
-                self.entered.push(at);
+            if !entered.contains(&at) {
+                entered.push(at);
             }
         }
         m.tree.bump_version();

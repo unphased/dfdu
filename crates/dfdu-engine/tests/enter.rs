@@ -249,3 +249,57 @@ fn rescans_of_a_parent_enter_the_mounts_entered_again() {
     e.read(entered);
     e.shutdown(Duration::from_secs(1));
 }
+
+#[test]
+fn entered_mounts_do_not_leak_between_overlapping_roots() {
+    let (tmp, e) = scanned();
+    let idle = || assert!(e.wait_idle(Some(Duration::from_secs(60))).is_idle());
+    let outer_disk = e.read(|m| m.tree.node_ref(find(m, "disk")));
+    e.send(Command::Enter { node: outer_disk });
+    idle();
+    e.send(Command::Scan {
+        path: tmp.path().join("disk").into(),
+        opts: JobOptions::default(),
+    });
+    idle();
+    let (outer, inner, mount) = e.read(|m| {
+        let roots: Vec<_> = m.tree.roots().collect();
+        assert_eq!(roots.len(), 2);
+        let inner = *roots
+            .iter()
+            .find(|&&r| m.tree.path_buf(r) == tmp.path().join("disk"))
+            .unwrap();
+        let outer = *roots.iter().find(|&&r| r != inner).unwrap();
+        let mount = m
+            .tree
+            .children(inner)
+            .find(|&c| m.tree.name(c) == b"inner")
+            .unwrap();
+        (
+            m.tree.node_ref(outer),
+            m.tree.node_ref(inner),
+            m.tree.node_ref(mount),
+        )
+    });
+    e.send(Command::Enter { node: mount });
+    idle();
+    e.send(Command::Rescan { node: outer });
+    idle();
+    e.read(|m| {
+        let inner = m.tree.resolve_visible(inner).unwrap();
+        let entered = m
+            .tree
+            .children(inner)
+            .find(|&c| m.tree.name(c) == b"inner")
+            .unwrap();
+        assert_eq!(m.tree.dir(entered).unwrap().state, DirState::Complete);
+        let disk = find(m, "disk");
+        let left_out = m
+            .tree
+            .children(disk)
+            .find(|&c| m.tree.name(c) == b"inner")
+            .unwrap();
+        assert_eq!(m.tree.dir(left_out).unwrap().state, DirState::Skipped);
+    });
+    e.shutdown(Duration::from_secs(1));
+}

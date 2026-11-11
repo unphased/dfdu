@@ -230,9 +230,10 @@ impl<B: Backend> Applier<B> {
         // This resume takes the whole tree over, and checks it again. Its rescans enter the
         // mounts it enters.
         self.resume.unverified.clear();
+        let entered = self.entered.entry(m.tree.node_ref(root)).or_default();
         for &at in &opts.enter {
-            if !self.entered.contains(&at) {
-                self.entered.push(at);
+            if !entered.contains(&at) {
+                entered.push(at);
             }
         }
         let homes = Homes::new(m.tree.dev_ino(root).0, &opts.enter);
