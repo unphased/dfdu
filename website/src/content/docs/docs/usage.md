@@ -39,9 +39,9 @@ The cleanup view (`3`) lists what the [cleanup rules](/docs/rules/) found, with 
 
 ## Image previews
 
-In kitty, highlighting a JPEG, PNG or ARW file in the Files view (`1`, including tree mode) shows a preview beside its row. No key or option is needed. The list must be at least 40 columns wide. The preview uses its right half, up to 40 columns by 12 rows, clipped to the space below the selected row.
+In kitty, highlighting a JPEG, PNG or ARW file in the Files view (`1`, including tree mode) shows a preview beside its row. No key or option is needed. The preview starts one cell after the selected row's displayed name and notes, at the same row. It uses 30 columns by 12 rows, clipped to the screen. It does not cover the selected name; if no space remains beside it, no preview is shown.
 
-Previews read local files only, not `--remote` scans or imported snapshots. They are disabled in tmux, screen and terminals not recognized as kitty. Decoding runs in the background; moving before it finishes discards the old result. An unreadable or invalid image has no preview.
+Previews read local files only, not `--remote` scans or imported snapshots. They require kitty terminal detection. Inherited `TERM_PROGRAM` or `KITTY_WINDOW_ID` values count inside multiplexers too. Decoding runs in the background; moving before it finishes discards the old result. An unreadable or invalid image has no preview.
 
 Changing the selection or view, opening an overlay or the debug panel, leaving the browser, or handing the terminal back for a connection clears the image. Closing the overlay or returning to Files restores it.
 

@@ -34,6 +34,8 @@ use crate::state::motion;
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Areas {
     pub list: Rect,
+    /// First cell after the selected row's rendered name and notes, with a one-cell gap.
+    pub preview_anchor: Option<(u16, u16)>,
     pub details: Option<Rect>,
     /// The open overlay.
     pub overlay: Option<Rect>,
@@ -80,6 +82,7 @@ pub fn draw(f: &mut Frame, app: &mut App, now: Instant) {
     app.areas = Areas {
         list,
         details: pane,
+        preview_anchor: None,
         overlay: None,
         debug: None,
     };

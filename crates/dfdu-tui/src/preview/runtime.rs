@@ -31,7 +31,7 @@ pub(crate) fn delete_terminal_image() {
     }
 }
 
-/// Right half of the list, starting beside the selected row. No remote paths are opened.
+/// Beside the selected row's rendered name. No remote paths are opened.
 pub(crate) fn request(app: &App, screen: Rect) -> Option<Request> {
     if !app.session.outside.local
         || app.session.from_file.is_some()
@@ -43,29 +43,13 @@ pub(crate) fn request(app: &App, screen: Rect) -> Option<Request> {
     {
         return None;
     }
-    let list = app.areas.list;
-    if list.width < 40 {
-        return None;
-    }
-    let row = app.session.selected_index()?.checked_sub(app.scroll)?;
-    if row >= usize::from(list.height) {
-        return None;
-    }
+    let (x, y) = app.areas.preview_anchor?;
     let (path, is_dir) = dfdu_session::selected_path::selected(&app.session)?;
     let path = path.to_local();
     if is_dir || !is_image(&path) {
         return None;
     }
-    let y = list.y + u16::try_from(row).ok()?;
-    let area = clip(
-        Rect::new(
-            list.x + list.width / 2,
-            y,
-            (list.width / 2).min(40),
-            (list.bottom() - y).min(12),
-        ),
-        screen,
-    )?;
+    let area = clip(Rect::new(x, y, 30, 12), screen)?;
     Some(Request::new(path, area))
 }
 

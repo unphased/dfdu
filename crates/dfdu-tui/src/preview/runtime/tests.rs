@@ -168,8 +168,29 @@ fn only_local_nonimported_files_in_an_unobscured_files_view_get_a_request() {
         selected.path,
         app.session.snap.dir_path.join(b"a.jpg").to_local()
     );
-    assert!(selected.area.x >= app.areas.list.x + app.areas.list.width / 2);
+    assert_eq!(selected.area.x, app.mouse.name_x + 2 + 5 + 1);
+    assert_eq!(selected.area.y, app.areas.list.y);
+    assert_eq!(selected.area.width, 30);
+    assert_eq!(selected.area.height, 12);
+    let narrow = render_buffer(&mut app, now, 39, 10).area;
+    let clipped = request(&app, narrow).expect("narrow screen still has room beside name");
+    assert_eq!(clipped.area.x, app.mouse.name_x + 2 + 5 + 1);
+    assert_eq!(
+        clipped.area.width,
+        (narrow.right() - clipped.area.x).min(30)
+    );
+    assert_eq!(clipped.area.height, narrow.bottom() - clipped.area.y);
+    render_buffer(&mut app, now, 100, 30);
     assert_eq!(clip(selected.area, screen), Some(selected.area));
+    for (name, cells) in [("界.jpg", 6), ("a-very-long-selected-image-name.jpg", 35)] {
+        app.session.snap.entries[0].name = name.as_bytes().into();
+        let screen = render_buffer(&mut app, now, 120, 30).area;
+        let area = request(&app, screen).unwrap().area;
+        assert_eq!(area.x, app.mouse.name_x + 2 + cells + 1);
+        assert_eq!(area.width, (screen.right() - area.x).min(30));
+    }
+    app.session.snap.entries[0].name = b"a.jpg".as_slice().into();
+    render_buffer(&mut app, now, 100, 30);
     app.session.outside.local = false;
     assert!(request(&app, screen).is_none());
     app.session.outside.local = true;

@@ -60,7 +60,7 @@ pub fn draw(f: &mut Frame, app: &mut App, head: Rect, area: Rect, now: Instant, 
         name.1 = name.1.saturating_sub(1);
     }
     app.mouse.name_x = area.x + name_offset(&cols);
-    let app = &*app;
+    let mut preview_anchor = None;
     let t = &app.theme;
     let trees = tree::rows(app, &visible);
     let width = area.width.saturating_sub(u16::from(scrollbar));
@@ -91,6 +91,12 @@ pub fn draw(f: &mut Frame, app: &mut App, head: Rect, area: Rect, now: Instant, 
         };
         let mut line = entry_line(app, &row_of, &cols);
         if sel == Some(app.scroll + row) {
+            preview_anchor = Some((
+                area.x
+                    .saturating_add(super::cells(line.width()))
+                    .saturating_add(1),
+                area.y.saturating_add(super::cells(row)),
+            ));
             line = cursor(t, line, width);
         }
         lines.push(line);
@@ -120,6 +126,7 @@ pub fn draw(f: &mut Frame, app: &mut App, head: Rect, area: Rect, now: Instant, 
             .thumb_style(t.fg_dim);
         f.render_stateful_widget(bar, area, &mut state);
     }
+    app.areas.preview_anchor = preview_anchor;
 }
 
 /// What the list says when the scan root finished empty: so, and, unless the scan was read
