@@ -20,6 +20,8 @@ dfdu update                                 # install the latest release
 
 `clean` changes nothing without `--yes`. JSON output is versioned; the schemas are in [`schema/`](https://github.com/jordond/dfdu/tree/main/schema). `dfdu --help` lists every option and exit code.
 
+Multiple paths are supported only by the local interactive browser, for example `dfdu ~/dev ~/Downloads`. They are not supported by subcommands, with `--remote`, or when stdout is not a terminal. See [Browsing](/docs/usage/) for details.
+
 ## Look
 
 ![dfdu scan printing a summary](/demos/scan-cli.gif)
@@ -34,4 +36,4 @@ dfdu update                                 # install the latest release
 
 ![dfdu diff showing what grew](/demos/diff.gif)
 
-Every scan is recorded, which is what `dfdu diff` compares against.
+Scan history is what `dfdu diff` compares against. Multi-root interactive scans are not recorded in history.

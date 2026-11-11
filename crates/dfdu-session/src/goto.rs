@@ -295,10 +295,19 @@ pub fn prefill(s: &SessionState) -> String {
 /// mount the scan did not enter (at the path or above it), or nothing yet or at all.
 pub fn reach(tree: &Tree, path: &HostPath) -> Reach {
     let missing = Reach::Kept(Kept::Missing(path.clone()));
-    let Some(root) = tree.roots().next() else {
+    let mut roots = tree.roots().peekable();
+    if roots.peek().is_none() {
         return Reach::Kept(Kept::NotYet(path.clone()));
+    }
+    let Some((root, root_path)) = roots
+        .filter_map(|root| {
+            let root_path = tree.host_path(root);
+            below(path, &root_path).map(|_| (root, root_path))
+        })
+        .max_by_key(|(_, root_path)| root_path.components().count())
+    else {
+        return missing;
     };
-    let root_path = tree.host_path(root);
     let Some(names) = below(path, &root_path).and_then(|p| {
         p.rel(&root_path)
             .map(|r| r.into_iter().map(<[u8]>::to_vec).collect::<Vec<_>>())
@@ -350,6 +359,20 @@ pub fn go(
     let root = s.snap.root_path.clone();
     let local = s.outside.local;
     let mut dest = resolve(input, &s.snap.dir_path, &root, s.home.as_deref(), local)?;
+    let inside_roots = |path: &HostPath| {
+        s.snap
+            .roots
+            .iter()
+            .chain(std::iter::once(&root))
+            .filter_map(|root| below(path, root).map(|p| (root.components().count(), p)))
+            .max_by_key(|(depth, _)| *depth)
+            .map(|(_, p)| p)
+    };
+    if let Dest::Outside(p) = &dest
+        && let Some(inside) = inside_roots(p)
+    {
+        dest = Dest::Within(inside);
+    }
     // The tree is the truth inside the scan, and an administrator's scan sees what this user
     // cannot: only a path outside a scan of this user's is looked up here.
     if let Dest::Outside(p) = &dest
@@ -358,7 +381,7 @@ pub fn go(
     {
         check_local(p)?;
         if let Ok(real) = dunce::canonicalize(p.to_local())
-            && let Some(inside) = below(&HostPath::local(&real), &root)
+            && let Some(inside) = inside_roots(&HostPath::local(&real))
         {
             dest = Dest::Within(inside);
         }

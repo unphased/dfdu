@@ -42,7 +42,7 @@ upload\:"One sent earlier, else send one, without asking"))' \
 '--help[Print help (see more with '\''--help'\'')]' \
 '-V[Print version]' \
 '--version[Print version]' \
-'::path -- Directory to browse (opens the interactive browser when stdout is a terminal):_files' \
+'::paths -- Directories to browse (opens the interactive browser when stdout is a terminal):_files' \
 ":: :_dfdu_commands" \
 "*::: :->dfdu" \
 && ret=0

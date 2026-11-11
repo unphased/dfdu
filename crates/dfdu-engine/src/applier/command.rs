@@ -224,6 +224,9 @@ impl<B: Backend> Applier<B> {
                 _ => {}
             }
         }
+        if matches!(cmd, Command::Delete { .. }) && m.tree.roots().nth(1).is_some() {
+            return Some("delete: unavailable for scans with multiple roots");
+        }
         if scans && m.status.disconnected.is_some() {
             return Some("the link to the agent is gone: nothing more is scanned");
         }

@@ -22,6 +22,12 @@ impl App {
         let hold = self.motion.has_ghosts();
         let r = self.session.refresh(snap, now, hold);
         self.reordered(r);
+        if !self.roots_initialized && self.session.snap.roots.len() > 1 {
+            self.roots_initialized = true;
+            if matches!(self.overlay, super::Overlay::None) {
+                self.overlay = super::Overlay::Roots(0);
+            }
+        }
     }
 
     /// Applies sort requests and the automatic sort to the snapshot already held, for a frame

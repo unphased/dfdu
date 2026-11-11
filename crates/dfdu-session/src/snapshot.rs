@@ -11,6 +11,39 @@ use dfdu_tree::{
 
 mod tree;
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dfdu_engine::test_support::{add_dir, add_file, meta};
+
+    #[test]
+    fn snapshots_follow_the_owning_root() {
+        let mut m = Model::default();
+        let first = m.tree.new_root(b"/first", &meta(Kind::Dir, 0, 1), true);
+        let second = m.tree.new_root(b"/second", &meta(Kind::Dir, 0, 2), true);
+        let child1 = add_dir(&mut m.tree, first, "child", 3);
+        let child2 = add_dir(&mut m.tree, second, "child", 4);
+        add_file(&mut m.tree, first, "one", 10, 5);
+        add_file(&mut m.tree, second, "two", 20, 6);
+        let roots = vec![m.tree.host_path(first), m.tree.host_path(second)];
+
+        for (dir, root, at_root) in [
+            (first, first, true),
+            (child1, first, false),
+            (second, second, true),
+            (child2, second, false),
+        ] {
+            let mut target = Target::of(&m.tree, dir);
+            let snap = build(&m, &mut target, SizeMode::Disk);
+            assert_eq!(snap.roots, roots);
+            assert_eq!(snap.dir_path, m.tree.host_path(dir));
+            assert_eq!(snap.root_path, m.tree.host_path(root));
+            assert_eq!(snap.root_total, m.tree.total(root));
+            assert_eq!(snap.at_root, at_root);
+        }
+    }
+}
+
 /// How an entry is marked in the list.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Mark {
@@ -199,7 +232,9 @@ pub struct Snapshot {
     /// The rules the scan classifies against, when it does: rows have a category column.
     pub rules: Option<std::sync::Arc<dfdu_rules::RuleSet>>,
     pub dir_path: HostPath,
-    /// Path of the scan root; `dir_path` is below it or equal to it.
+    /// Paths of all scan roots, in tree order.
+    pub roots: Vec<HostPath>,
+    /// Path of the scan root owning `dir_path`.
     pub root_path: HostPath,
     pub dir_node: Option<NodeRef>,
     pub at_root: bool,
@@ -307,10 +342,10 @@ pub fn build_view(
         generation: t.generation,
         ..Default::default()
     });
-    let Some(root) = tree.roots().next() else {
+    snap.roots = tree.roots().map(|root| tree.host_path(root)).collect();
+    let Some(fallback) = tree.roots().next() else {
         return snap;
     };
-    snap.root_total = tree.total(root);
 
     let mut dir = target.resolve(tree);
     // The directory is gone: go up until something resolves.
@@ -321,7 +356,13 @@ pub fn build_view(
         dir = find_path(tree, &p);
         path = p.parent();
     }
-    let dir = dir.filter(|&d| tree.dir(d).is_some()).unwrap_or(root);
+    let dir = dir.filter(|&d| tree.dir(d).is_some()).unwrap_or(fallback);
+    let mut root = dir;
+    while let Some(parent) = tree.parent(root) {
+        root = parent;
+    }
+    snap.root_path = tree.host_path(root);
+    snap.root_total = tree.total(root);
     *target = Target::of(tree, dir);
     let Some(rec) = tree.dir(dir) else {
         return snap;
@@ -339,7 +380,6 @@ pub fn build_view(
 
     snap.focus = Some((rec.job, rec.dir_id));
     snap.dir_path = tree.host_path(dir);
-    snap.root_path = tree.host_path(root);
     snap.dir_node = Some(tree.node_ref(dir));
     snap.at_root = dir == root;
     snap.dir_total = tree.total(dir);

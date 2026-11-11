@@ -19,6 +19,9 @@ use crate::session::SessionOptions;
 pub type StartLocal =
     Box<dyn FnOnce(&Path, EngineOptions) -> (Engine<dfdu_scan::NativeBackend>, JobOptions)>;
 
+/// Starts one engine and supplies independent options for its roots.
+pub type StartMultiple = Box<dyn FnOnce(EngineOptions) -> (Engine<NativeBackend>, Vec<JobOptions>)>;
+
 /// What the browser opens.
 pub enum Source {
     /// A directory on this host, scanned by the engine `start` returns; `None` shows the disk
@@ -26,6 +29,12 @@ pub enum Source {
     Local {
         path: Option<PathBuf>,
         start: StartLocal,
+    },
+    /// Independent directories scanned in one engine, each with its own job options.
+    /// Multi-root scans do not use the single-root cache or history.
+    Multiple {
+        paths: Vec<PathBuf>,
+        start: StartMultiple,
     },
     /// A scan read from a file, shown at once while its root is rescanned by the engine `start`
     /// returns. When `journal`, where the change journal stood when the scan was taken, can
@@ -185,6 +194,28 @@ pub fn open_reusing(
                 },
             })
         }
+        Source::Multiple { paths, start } => {
+            if paths.is_empty() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "no directories to scan",
+                ));
+            }
+            let (engine, jobs) = start(opts.clone());
+            if paths.len() != jobs.len() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "each directory needs scan options",
+                ));
+            }
+            for (path, job) in paths.into_iter().zip(jobs) {
+                engine.send(Command::Scan {
+                    path: path.into(),
+                    opts: job,
+                });
+            }
+            local(engine, None, None)
+        }
         Source::Resumed {
             tree,
             journal,
@@ -297,6 +328,41 @@ mod tests {
             let backend = dfdu_scan::native_backend(dfdu_sys::Storage::Unknown, false);
             (Engine::start(backend, opts), JobOptions::default())
         })
+    }
+
+    #[test]
+    fn multiple_roots_scan_independently_without_cache_or_history() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths: Vec<_> = ["a", "b"]
+            .iter()
+            .map(|name| {
+                let path = tmp.path().join(name);
+                std::fs::create_dir(&path).unwrap();
+                std::fs::write(path.join("file"), name).unwrap();
+                path
+            })
+            .collect();
+        let source = Source::Multiple {
+            paths: paths.clone(),
+            start: Box::new(|opts| {
+                let backend = dfdu_scan::native_backend(dfdu_sys::Storage::Unknown, false);
+                (Engine::start(backend, opts), vec![JobOptions::default(); 2])
+            }),
+        };
+        let Ok(Opened::Native(s)) = open(source, &EngineOptions::default(), true) else {
+            panic!("multiple local roots");
+        };
+        assert!(s.setup.jobs.history.is_none() && s.setup.jobs.cache.is_none());
+        assert!(s.engine.wait_idle(Some(Duration::from_secs(10))).is_idle());
+        s.engine.read(|m| {
+            let roots: Vec<_> = m.tree.roots().collect();
+            assert_eq!(roots.len(), 2);
+            for (root, path) in roots.into_iter().zip(&paths) {
+                assert_eq!(m.tree.path_buf(root), dunce::canonicalize(path).unwrap());
+                assert!(m.tree.total(root).items > 0);
+            }
+        });
+        s.engine.shutdown(Duration::from_millis(200));
     }
 
     fn wait_totals(e: &Engine<NativeBackend>) -> (u64, u64) {

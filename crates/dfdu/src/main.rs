@@ -80,23 +80,24 @@ const EXIT_CODES: &str = "Exit codes:
 struct Cli {
     #[command(subcommand)]
     cmd: Option<Cmd>,
-    /// Directory to browse (opens the interactive browser when stdout is a terminal).
-    path: Option<PathBuf>,
+    /// Directories to browse (opens the interactive browser when stdout is a terminal).
+    #[arg(value_name = "PATH")]
+    paths: Vec<PathBuf>,
     #[command(flatten)]
     mounts: MountArgs,
     #[command(flatten)]
     rules: RuleArgs,
     /// Choose a disk to browse from the mounted filesystems.
-    #[arg(long, conflicts_with = "path")]
+    #[arg(long, conflicts_with = "paths")]
     disks: bool,
     /// Open the scan saved in FILE (a snapshot or an ncdu export) at once, and rescan its
     /// directory in the background, replacing it when done. A snapshot is rescanned with the
     /// mount options it was taken with.
-    #[arg(long, value_name = "FILE", conflicts_with_all = ["path", "disks", "import"])]
+    #[arg(long, value_name = "FILE", conflicts_with_all = ["paths", "disks", "import"])]
     resume_from: Option<PathBuf>,
     /// Browse a scan saved in FILE (a snapshot, an ncdu JSON export, plain or zstd, or an ncdu
     /// binary export from `ncdu -O`; `-` for stdin), read-only.
-    #[arg(short = 'f', long = "file", value_name = "FILE", conflicts_with_all = ["path", "disks"])]
+    #[arg(short = 'f', long = "file", value_name = "FILE", conflicts_with_all = ["paths", "disks"])]
     import: Option<PathBuf>,
     /// Never delete anything: the browser leaves out its delete keys and runs cleanup commands
     /// only as dry runs.
@@ -393,6 +394,10 @@ fn main() -> ExitCode {
 /// Runs the subcommand. Those that can stop early return the exit code they stop with as
 /// `Err`, so their steps chain with `?`.
 fn run(cli: Cli) -> Result<ExitCode, ExitCode> {
+    if let Some(message) = multiple_paths_error(&cli, std::io::stdout().is_terminal()) {
+        eprintln!("dfdu: {message}");
+        return Err(ExitCode::from(2));
+    }
     let rules = || RuleArgs::default().load().ok_or(ExitCode::from(1));
     match cli.cmd {
         Some(Cmd::Scan(args)) => scan::run(args),
@@ -420,7 +425,11 @@ fn run(cli: Cli) -> Result<ExitCode, ExitCode> {
                 return disks::run();
             }
             scan::run(scan::ScanArgs {
-                path: cli.path.unwrap_or_else(|| PathBuf::from(".")),
+                path: cli
+                    .paths
+                    .into_iter()
+                    .next()
+                    .unwrap_or_else(|| PathBuf::from(".")),
                 remote: cli.remote,
                 remote_agent: cli.remote_agent,
                 mounts: cli.mounts,
@@ -434,11 +443,59 @@ fn run(cli: Cli) -> Result<ExitCode, ExitCode> {
     }
 }
 
+/// Multiple roots are only supported by the local interactive browser.
+fn multiple_paths_error(cli: &Cli, terminal: bool) -> Option<&'static str> {
+    if cli.paths.len() <= 1 {
+        None
+    } else if cli.remote.is_some() {
+        Some("multiple paths are not supported with --remote")
+    } else if !terminal {
+        Some("multiple paths require the interactive browser")
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use dfdu_tui::ColorLevel;
 
     use super::*;
+
+    #[test]
+    fn multiple_paths_are_only_allowed_in_the_local_browser() {
+        let cli = Cli::try_parse_from(["dfdu", "a", "b"]).unwrap();
+        assert_eq!(cli.paths, [PathBuf::from("a"), PathBuf::from("b")]);
+        assert_eq!(multiple_paths_error(&cli, true), None);
+        assert_eq!(
+            multiple_paths_error(&cli, false),
+            Some("multiple paths require the interactive browser")
+        );
+
+        let remote = Cli::try_parse_from(["dfdu", "--remote", "host", "a", "b"]).unwrap();
+        assert_eq!(
+            multiple_paths_error(&remote, true),
+            Some("multiple paths are not supported with --remote")
+        );
+        assert!(multiple_paths_error(&Cli::try_parse_from(["dfdu"]).unwrap(), false).is_none());
+        assert!(
+            multiple_paths_error(
+                &Cli::try_parse_from(["dfdu", "--remote", "host", "a"]).unwrap(),
+                false
+            )
+            .is_none()
+        );
+
+        for args in [
+            vec!["dfdu", "--disks", "a", "b"],
+            vec!["dfdu", "--file", "scan", "a", "b"],
+            vec!["dfdu", "--resume-from", "scan", "a", "b"],
+            vec!["dfdu", "scan", "a", "b"],
+            vec!["dfdu", "disks", "a", "b"],
+        ] {
+            assert!(Cli::try_parse_from(args).is_err());
+        }
+    }
 
     #[test]
     fn a_failed_write_exits_1_and_a_closed_pipe_quietly() {
@@ -472,7 +529,7 @@ mod tests {
         assert_eq!(cli.theme, "light");
         assert_eq!(cli.color, ColorFlag(Some(ColorLevel::Ansi256)));
         assert!(cli.no_mouse && cli.debug_stats);
-        assert_eq!(cli.path, Some(PathBuf::from("/x")));
+        assert_eq!(cli.paths, vec![PathBuf::from("/x")]);
 
         for (value, level) in [
             ("never", ColorLevel::None),
@@ -487,7 +544,8 @@ mod tests {
         let cli = Cli::try_parse_from(["dfdu", "--bars", "ascii"]).expect("bars");
         assert_eq!(cli.bars, Some(Bars::Ascii));
         assert!(Cli::try_parse_from(["dfdu", "--bars", "blocks"]).is_err());
-        // Browser options are not options of `dfdu scan`.
-        assert!(Cli::try_parse_from(["dfdu", "--theme", "dark", "scan", "/x"]).is_err());
+        // After browser options, names that also match subcommands are paths.
+        let cli = Cli::try_parse_from(["dfdu", "--theme", "dark", "scan", "/x"]).unwrap();
+        assert_eq!(cli.paths, [PathBuf::from("scan"), PathBuf::from("/x")]);
     }
 }

@@ -7,7 +7,7 @@ use dfdu_session::act::{self as session, Ran};
 
 use super::Action;
 use crate::app::views::{self, View};
-use crate::app::{App, Effect};
+use crate::app::{App, Effect, Overlay};
 use crate::features::{debug, details, selected_path, treemap};
 use crate::overlay::{goto, help, mark_pattern, palette, type_filter};
 
@@ -15,6 +15,19 @@ use crate::overlay::{goto, help, mark_pattern, palette, type_filter};
 /// and returns the effects for the run loop. In a read-only browser an action that deletes
 /// only says so.
 pub fn run(app: &mut App, a: Action) -> Vec<Effect> {
+    if a == Action::Parent && app.session.snap.at_root && app.session.snap.roots.len() > 1 {
+        if !dfdu_session::tree::act::left(&mut app.session) {
+            let selected = app
+                .session
+                .snap
+                .roots
+                .iter()
+                .position(|root| *root == app.session.snap.root_path)
+                .unwrap_or(0);
+            app.overlay = Overlay::Roots(selected);
+        }
+        return Vec::new();
+    }
     let now = app.session.sort_schedule.last_input();
     let mut then = match session::run(&mut app.session, a, now) {
         Ran::Done(then) => then,

@@ -67,21 +67,19 @@ fn ident(tree: &Tree, ix: Ix) -> Ident {
     }
 }
 
-/// Finds a visible node by path: the root whose path is a prefix of it, then one child per
-/// remaining component.
+/// Finds a visible node by path, trying matching roots from most specific to least specific.
 #[must_use]
 pub fn find_path(tree: &Tree, path: &HostPath) -> Option<Ix> {
-    for root in tree.roots() {
-        let Some(rest) = path.rel(&tree.host_path(root)) else {
-            continue;
-        };
-        let mut cur = root;
-        for name in rest {
-            cur = tree.children(cur).find(|&c| tree.name(c) == name)?;
-        }
-        return Some(cur);
-    }
-    None
+    let mut roots: Vec<_> = tree
+        .roots()
+        .filter_map(|root| path.rel(&tree.host_path(root)).map(|rest| (root, rest)))
+        .collect();
+    roots.sort_by_key(|(_, rest)| rest.len());
+    roots.into_iter().find_map(|(root, rest)| {
+        rest.into_iter().try_fold(root, |cur, name| {
+            tree.children(cur).find(|&c| tree.name(c) == name)
+        })
+    })
 }
 
 #[cfg(test)]
