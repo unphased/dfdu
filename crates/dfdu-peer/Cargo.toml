@@ -1,0 +1,15 @@
+[package]
+name = "dfdu-peer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+crossbeam-channel.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+libc.workspace = true

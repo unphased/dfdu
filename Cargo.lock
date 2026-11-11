@@ -1465,6 +1465,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "dfdu-peer"
+version = "0.6.0"
+dependencies = [
+ "crossbeam-channel",
+ "libc",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "dfdu-rules"
 version = "0.6.0"
 dependencies = [
