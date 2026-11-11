@@ -224,8 +224,16 @@ impl<B: Backend> Applier<B> {
                 _ => {}
             }
         }
-        if matches!(cmd, Command::Delete { .. }) && m.tree.roots().nth(1).is_some() {
-            return Some("delete: unavailable for scans with multiple roots");
+        if m.tree.roots().nth(1).is_some() {
+            match cmd {
+                Command::Delete { .. } => {
+                    return Some("delete: unavailable for scans with multiple roots");
+                }
+                Command::RunNative { dry_run: false, .. } => {
+                    return Some("native command: unavailable for scans with multiple roots");
+                }
+                _ => {}
+            }
         }
         if scans && m.status.disconnected.is_some() {
             return Some("the link to the agent is gone: nothing more is scanned");
