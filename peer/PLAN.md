@@ -153,7 +153,8 @@ Each phase starts with failing tests in their own commit, then green commits at 
    The footer shows role and partner. No navigation, discovery or swap yet.
    NDJSON frames are `{"hello":{"proto":1,"id":"...","host":"...","role":"master"}}`,
    answered with role `slave`, then `{"ping":{}}` or `{"bye":{}}`. Lines are at most
-   64 KiB; ten seconds without a valid frame disconnects. Another binder is refused with
+   64 KiB. Before the hello exchange a link waits 30 seconds (ssh may stall on key
+   fallbacks); once bound, ten seconds without a valid frame disconnects. Another binder is refused with
    `{"bye":{"reason":"peer is already bound or connecting"}}`.
    All I/O is on transport workers; events enter the TUI's existing select loop.
    Registration cleanup handles Drop, panic and termination signals. SIGKILL leaves stale
