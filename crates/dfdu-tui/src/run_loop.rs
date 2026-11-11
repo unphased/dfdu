@@ -292,24 +292,30 @@ where
             recv(input) -> ev => match ev {
                 Ok(Event::Key(k)) => {
                     assert!(!inject_panic, "injected UI panic");
-                    peer_target = None;
-                    crate::peer_commands::cancel_retry(session.front_mut());
+                    let before = cursor(session.front());
                     let fx = session.front_mut().key(k, Instant::now());
                     handle_effects(session, fx);
-                    if crate::peer_commands::pending(session) { peer_move = true; }
                     if let Some(text) = goto::submitted(session.front_mut()) {
                         let gone = session.go_to_path(&text);
                         let fx = goto::gone_to(session.front_mut(), gone);
                         handle_effects(session, fx);
                     }
+                    if cursor_moved(&before, &cursor(session.front())) {
+                        peer_target = None;
+                        crate::peer_commands::cancel_retry(session.front_mut());
+                    }
+                    if crate::peer_commands::pending(session) { peer_move = true; }
                     input_dirty = true;
                 }
                 Ok(Event::Mouse(m)) if mouse_on => {
-                    peer_target = None;
-                    crate::peer_commands::cancel_retry(session.front_mut());
+                    let before = cursor(session.front());
                     if let Some(fx) = mouse::event(session.front_mut(), m, Instant::now()) {
                         handle_effects(session, fx);
                         input_dirty = true;
+                    }
+                    if cursor_moved(&before, &cursor(session.front())) {
+                        peer_target = None;
+                        crate::peer_commands::cancel_retry(session.front_mut());
                     }
                 }
                 Ok(Event::Resize(..)) => input_dirty = true,
@@ -337,6 +343,27 @@ where
     }
 }
 
+type Cursor = (
+    dfdu_tree::HostPath,
+    Option<Vec<u8>>,
+    dfdu_session::view::View,
+    Option<dfdu_tree::HostPath>,
+);
+
+fn cursor(app: &App) -> Cursor {
+    let state = &app.session;
+    (
+        state.target.path.clone(),
+        state.selected.as_ref().map(|s| s.name.clone()),
+        state.current_view(),
+        dfdu_session::selected_path::selected(state).map(|(path, _)| path),
+    )
+}
+
+fn cursor_moved(before: &Cursor, after: &Cursor) -> bool {
+    before.0 != after.0 || before.1 != after.1 || (before.2 == after.2 && before.3 != after.3)
+}
+
 /// Carries out the effects of a key or mouse event: the session does the engine's part
 /// ([`Session::carry_out`]), and the TUI shows the error list, copies through the terminal and
 /// opens the file manager.
@@ -353,5 +380,56 @@ fn handle_effects<B: dfdu_scan::Backend>(session: &mut Session<'_, B, App>, fx: 
             }
             Output::Open { path, is_dir } => selected_path::spawn_open(app, &path, is_dir),
         }
+    }
+}
+
+#[cfg(test)]
+mod cursor_tests {
+    use super::*;
+    use crate::model::snapshot::test_entry;
+    use crate::tests::{press, snap_with_totals};
+    use crate::theme::Theme;
+    use ratatui::crossterm::event::{KeyCode, KeyModifiers, MouseEvent, MouseEventKind};
+
+    #[test]
+    fn only_actual_user_cursor_moves_are_detected() {
+        let now = Instant::now();
+        let mut app = App::new(Theme::no_color(), now);
+        app.refresh(
+            snap_with_totals(vec![test_entry(0, "a", 2), test_entry(1, "b", 1)], 1),
+            now,
+        );
+        let before = cursor(&app);
+        app.key(press(KeyCode::Char('?')), now);
+        assert!(
+            !cursor_moved(&before, &cursor(&app)),
+            "help is not a cursor move"
+        );
+        app.key(press(KeyCode::Char('?')), now);
+        let _ = mouse::event(
+            &mut app,
+            MouseEvent {
+                kind: MouseEventKind::Moved,
+                column: 0,
+                row: 0,
+                modifiers: KeyModifiers::NONE,
+            },
+            now,
+        );
+        assert!(
+            !cursor_moved(&before, &cursor(&app)),
+            "mouse motion is not a cursor move"
+        );
+        app.key(press(KeyCode::Down), now);
+        assert!(
+            cursor_moved(&before, &cursor(&app)),
+            "down moves the selection"
+        );
+        let last = cursor(&app);
+        app.key(press(KeyCode::Down), now);
+        assert!(
+            !cursor_moved(&last, &cursor(&app)),
+            "down at the boundary does not move"
+        );
     }
 }

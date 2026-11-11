@@ -29,11 +29,9 @@ pub(crate) struct PeerState {
 #[derive(Clone)]
 struct Retry {
     version: u64,
-    cursor: Option<HostPath>,
-    deferred: Option<HostPath>,
 }
 
-/// Cancel automatic rematching when the user navigates, even if the cursor did not move.
+/// Cancel automatic rematching after a user cursor move.
 pub(crate) fn cancel_retry(app: &mut App) {
     app.peer.retry = None;
 }
@@ -82,18 +80,9 @@ pub(crate) fn payload(tree: &Tree, path: &HostPath) -> Option<Value> {
 }
 
 pub(crate) fn retry<B: dfdu_scan::Backend>(session: &mut Session<'_, B, App>) -> bool {
-    let Some(mut retry) = session.front().peer.retry.clone() else {
+    let Some(retry) = session.front().peer.retry.clone() else {
         return false;
     };
-    let current = dfdu_session::selected_path::selected(&session.front().session).map(|(p, _)| p);
-    if retry.deferred.is_some() && current == retry.deferred {
-        retry.cursor = current.clone();
-        retry.deferred = None;
-        session.front_mut().peer.retry = Some(retry.clone());
-    } else if current != retry.cursor {
-        session.front_mut().peer.retry = None;
-        return false;
-    }
     let new_version = session.engine().read(|m| m.tree.version());
     if retry.version == new_version {
         return false;
@@ -153,12 +142,7 @@ fn cycle<B: dfdu_scan::Backend>(session: &mut Session<'_, B, App>, direction: is
             m.status.scanning(),
         )
     });
-    let cursor = dfdu_session::selected_path::selected(&session.front().session).map(|(p, _)| p);
-    peer.retry = (matches.is_empty() || scanning).then_some(Retry {
-        version,
-        cursor,
-        deferred: None,
-    });
+    peer.retry = (matches.is_empty() || scanning).then_some(Retry { version });
     if matches.is_empty() {
         peer.current = None;
         session.front_mut().session.status = Some(format!("no match for {}", query.name));
@@ -175,9 +159,6 @@ fn cycle<B: dfdu_scan::Backend>(session: &mut Session<'_, B, App>, direction: is
     };
     let (path, root) = matches[at].clone();
     peer.current = Some(path.clone());
-    if let Some(retry) = &mut peer.retry {
-        retry.deferred = Some(path.clone());
-    }
     let app = session.front_mut();
     show(app, path.clone(), root);
     app.session.status = Some(format!("{}/{} matches", at + 1, matches.len()));
@@ -344,6 +325,12 @@ mod tests {
         let file = tree.add_file(root, b"file", &meta(Kind::File, 3, 2), true, None);
         let path = tree.host_path(file);
         engine.load(tree);
+        // The scan can populate the initial selection before the retry runs.
+        let _ = session.tick(now).unwrap();
+        assert_eq!(
+            dfdu_session::selected_path::selected(&session.front().session).map(|(p, _)| p),
+            Some(path.clone())
+        );
         assert!(retry(&mut session));
         assert_eq!(session.front().peer.current.as_ref(), Some(&path));
         let _ = session.tick(now).unwrap();
@@ -351,6 +338,30 @@ mod tests {
             dfdu_session::selected_path::selected(&session.front().session).map(|(p, _)| p),
             Some(path)
         );
+        drop(session);
+        engine.shutdown(Duration::from_millis(200));
+    }
+
+    #[test]
+    fn cancelled_retry_does_not_replace_the_users_selection() {
+        use dfdu_engine::test_support::meta;
+        use dfdu_tree::Kind;
+
+        let engine = Engine::start(PortableBackend::default(), EngineOptions::default());
+        let now = Instant::now();
+        let mut session = Session::over(
+            &engine,
+            App::new(Theme::no_color(), now),
+            SessionOptions::default(),
+        );
+        command(&mut session, json!({"match":{"size":3,"name":"file"}}));
+        cancel_retry(session.front_mut());
+        let mut tree = Tree::new();
+        let root = tree.new_root(b"/r", &meta(Kind::Dir, 0, 1), true);
+        tree.add_file(root, b"file", &meta(Kind::File, 3, 2), true, None);
+        engine.load(tree);
+        assert!(!retry(&mut session));
+        assert!(session.front().peer.current.is_none());
         drop(session);
         engine.shutdown(Duration::from_millis(200));
     }
