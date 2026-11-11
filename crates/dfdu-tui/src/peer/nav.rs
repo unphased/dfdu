@@ -22,9 +22,363 @@ mod tests {
     }
     #[test]
     fn stale_hash_cannot_change_candidates() {
-        let mut state = State::default();
-        state.seq = 2;
+        let mut state = State {
+            seq: 2,
+            ..State::default()
+        };
         state.complete((1, "old".into(), Some("hash".into())));
         assert!(state.hashes.is_empty());
     }
+}
+
+#[derive(Default, Debug)]
+pub(crate) struct State {
+    pub seq: u64,
+    pub candidates: Vec<Candidate>,
+    pub hashes: std::collections::HashMap<String, Option<String>>,
+    pub expected: Option<String>,
+    pub size: Option<u64>,
+    pub focus: bool,
+    pub cursor: usize,
+    pub footer: String,
+}
+#[derive(Debug)]
+pub(crate) struct Candidate {
+    pub path: String,
+    pub size: u64,
+    pub mtime: i64,
+}
+type Result = (u64, String, Option<String>);
+impl State {
+    pub fn complete(&mut self, (seq, path, hash): Result) {
+        if seq == self.seq {
+            self.hashes.insert(path, hash);
+        }
+    }
+    pub fn verdict(&self, c: &Candidate) -> Verdict {
+        if self.size != Some(c.size) {
+            return Verdict::NameOnly;
+        }
+        match (self.expected.as_ref(), self.hashes.get(&c.path)) {
+            (Some(a), Some(Some(b))) if a == b => Verdict::HashMatch,
+            (Some(_), Some(Some(_))) => Verdict::HashMismatch,
+            (_, Some(None)) => Verdict::NameOnly,
+            _ => Verdict::Pending,
+        }
+    }
+}
+/// Two fixed workers share a replaceable queue. Old in-flight reads cannot publish
+/// into a newer generation; moving never creates another thread.
+type Queue = std::sync::Arc<(
+    std::sync::Mutex<Option<Vec<(u64, String)>>>,
+    std::sync::Condvar,
+)>;
+pub(crate) struct Workers {
+    queue: Queue,
+    pub results: crossbeam_channel::Receiver<Result>,
+}
+impl Workers {
+    pub fn new() -> Self {
+        let queue = std::sync::Arc::new((
+            std::sync::Mutex::new(Some(Vec::<(u64, String)>::new())),
+            std::sync::Condvar::new(),
+        ));
+        let (tx, results) = crossbeam_channel::bounded(64);
+        for _ in 0..2 {
+            let q = queue.clone();
+            let tx = tx.clone();
+            std::thread::spawn(move || {
+                loop {
+                    let job = {
+                        let (lock, wake) = &*q;
+                        let mut jobs = lock.lock().unwrap();
+                        loop {
+                            let Some(list) = jobs.as_mut() else {
+                                return;
+                            };
+                            if let Some(job) = list.pop() {
+                                break job;
+                            }
+                            jobs = wake.wait(jobs).unwrap();
+                        }
+                    };
+                    let hash = dfdu_peer::sample_hash(std::path::Path::new(&job.1)).ok();
+                    if tx.send((job.0, job.1, hash)).is_err() {
+                        return;
+                    }
+                }
+            });
+        }
+        Self { queue, results }
+    }
+    pub fn replace(&self, jobs: Vec<(u64, String)>) {
+        *self.queue.0.lock().unwrap() = Some(jobs);
+        self.queue.1.notify_all();
+    }
+}
+impl Drop for Workers {
+    fn drop(&mut self) {
+        *self.queue.0.lock().unwrap() = None;
+        self.queue.1.notify_all();
+    }
+}
+
+pub(crate) fn draw(f: &mut ratatui::Frame, app: &crate::app::App) {
+    let s = &app.nav;
+    if s.candidates.is_empty()
+        || app
+            .peer
+            .as_ref()
+            .is_none_or(|p| p.peer.status().role != dfdu_peer::Role::Slave)
+    {
+        return;
+    }
+    let area = f.area();
+    let height = (s.candidates.len() as u16 + 2).min(8).min(area.height / 2);
+    let rect = ratatui::layout::Rect::new(
+        area.x,
+        area.bottom().saturating_sub(height + 2),
+        area.width,
+        height,
+    );
+    let lines: Vec<_> = s
+        .candidates
+        .iter()
+        .enumerate()
+        .skip(s.cursor.saturating_sub(4))
+        .take(height.saturating_sub(2) as usize)
+        .map(|(i, c)| {
+            format!(
+                "{} {} {} {} {}",
+                if i == s.cursor { ">" } else { " " },
+                mark(s.verdict(c)),
+                c.path,
+                c.size,
+                c.mtime
+            )
+        })
+        .collect();
+    f.render_widget(ratatui::widgets::Clear, rect);
+    f.render_widget(
+        ratatui::widgets::Paragraph::new(lines.join("\n")).block(
+            ratatui::widgets::Block::bordered().title(if s.focus {
+                "Candidates: j/k Enter Esc"
+            } else {
+                "Candidates: C focus"
+            }),
+        ),
+        rect,
+    );
+}
+
+pub(crate) struct Runtime {
+    pub workers: Workers,
+    index: dfdu_session::match_index::MatchIndex,
+    last_path: Option<String>,
+    last_nav: Option<Nav>,
+    version: u64,
+    followed: Option<String>,
+    local_moved: bool,
+}
+impl Runtime {
+    pub fn new() -> Self {
+        Self {
+            workers: Workers::new(),
+            index: Default::default(),
+            last_path: None,
+            last_nav: None,
+            version: 0,
+            followed: None,
+            local_moved: false,
+        }
+    }
+    pub fn tick<B: dfdu_scan::Backend>(
+        &mut self,
+        session: &mut dfdu_session::Session<'_, B, crate::app::App>,
+    ) {
+        let Some(peer) = session.front().peer.as_ref().map(|p| p.peer.clone()) else {
+            return;
+        };
+        let selected = dfdu_session::selected_path::selected(&session.front().session)
+            .map(|(p, d)| (p.to_string(), d));
+        match peer.status().role {
+            dfdu_peer::Role::Master => {
+                if crate::app::views::current(session.front()) != crate::app::views::View::Files {
+                    return;
+                }
+                let Some((path, dir)) = selected else {
+                    return;
+                };
+                if self.last_path.as_ref() == Some(&path) {
+                    return;
+                }
+                self.last_path = Some(path.clone());
+                session.front_mut().nav.seq += 1;
+                let seq = session.front().nav.seq;
+                let nav = session.engine().read(|m| {
+                    let ix =
+                        dfdu_tree::find_path(&m.tree, &dfdu_tree::HostPath::from(path.as_str()))?;
+                    let mut parents = Vec::new();
+                    let mut p = m.tree.parent(ix);
+                    while let Some(i) = p {
+                        parents.push(String::from_utf8_lossy(m.tree.name(i)).into_owned());
+                        p = m.tree.parent(i);
+                    }
+                    Some(Nav {
+                        seq,
+                        path: path.clone(),
+                        name: String::from_utf8_lossy(m.tree.name(ix)).into_owned(),
+                        kind: if dir {
+                            dfdu_peer::NavKind::Dir
+                        } else {
+                            dfdu_peer::NavKind::File
+                        },
+                        size: m.tree.raw_size(ix).0,
+                        mtime: m.tree.mtime(ix),
+                        parents,
+                    })
+                });
+                if let Some(nav) = nav {
+                    let _ = peer.send_nav(nav);
+                    self.workers
+                        .replace(if dir { vec![] } else { vec![(seq, path)] });
+                }
+            }
+            dfdu_peer::Role::Slave => {
+                let (version, busy) = session.engine().read(|m| {
+                    (
+                        m.tree.version(),
+                        m.status.jobs.iter().any(|j| {
+                            matches!(
+                                j.phase,
+                                dfdu_engine::JobPhase::Running | dfdu_engine::JobPhase::Finishing
+                            )
+                        }),
+                    )
+                });
+                if self.followed != selected.map(|s| s.0) {
+                    self.local_moved = true;
+                }
+                if !busy
+                    && !self.local_moved
+                    && version != self.version
+                    && let Some(nav) = self.last_nav.clone()
+                {
+                    self.receive(session, nav);
+                }
+                if !busy {
+                    self.version = version;
+                }
+            }
+            dfdu_peer::Role::Unbound => {
+                self.last_path = None;
+                self.last_nav = None;
+                self.followed = None;
+                let seq = session.front().nav.seq;
+                session.front_mut().nav = State {
+                    seq,
+                    ..State::default()
+                };
+                self.workers.replace(vec![]);
+            }
+        }
+    }
+    pub fn receive<B: dfdu_scan::Backend>(
+        &mut self,
+        session: &mut dfdu_session::Session<'_, B, crate::app::App>,
+        nav: Nav,
+    ) {
+        if self.last_nav.as_ref().is_some_and(|old| nav.seq < old.seq) {
+            return;
+        }
+        let candidates = session.engine().read(|m| {
+            let parents: Vec<_> = nav.parents.iter().map(|s| s.as_bytes()).collect();
+            self.index
+                .ranked_candidates(
+                    &m.tree,
+                    nav.size,
+                    nav.name.as_bytes(),
+                    &parents,
+                    nav.mtime,
+                    nav.kind == dfdu_peer::NavKind::Dir,
+                )
+                .into_iter()
+                .map(|ix| Candidate {
+                    path: m.tree.host_path(ix).to_string(),
+                    size: m.tree.raw_size(ix).0,
+                    mtime: m.tree.mtime(ix),
+                })
+                .collect::<Vec<_>>()
+        });
+        let expected = if session.front().nav.seq == nav.seq {
+            session.front().nav.expected.clone()
+        } else {
+            None
+        };
+        let jobs = candidates
+            .iter()
+            .filter(|c| c.size == nav.size && nav.kind == dfdu_peer::NavKind::File)
+            .map(|c| (nav.seq, c.path.clone()))
+            .collect();
+        let best = candidates.first().map(|c| c.path.clone());
+        session.front_mut().nav = State {
+            seq: nav.seq,
+            candidates,
+            expected,
+            size: (nav.kind == dfdu_peer::NavKind::File).then_some(nav.size),
+            ..State::default()
+        };
+        self.last_nav = Some(nav);
+        self.local_moved = false;
+        self.workers.replace(jobs);
+        if let Some(path) = best {
+            jump(session, &path);
+        }
+        self.followed = dfdu_session::selected_path::selected(&session.front().session)
+            .map(|(p, _)| p.to_string());
+        publish(session.front());
+    }
+    pub fn complete(&self, app: &mut crate::app::App, result: Result) {
+        let Some(peer) = app.peer.as_ref().map(|p| p.peer.clone()) else {
+            return;
+        };
+        if result.0 != app.nav.seq {
+            return;
+        }
+        if peer.status().role == dfdu_peer::Role::Master {
+            if let Some(hash) = result.2 {
+                let _ = peer.send_nav_hash(dfdu_peer::NavHash {
+                    seq: result.0,
+                    hash,
+                });
+            }
+        } else {
+            app.nav.complete(result);
+            publish(app);
+        }
+    }
+}
+pub(crate) fn publish(app: &crate::app::App) {
+    let Some(p) = &app.peer else {
+        return;
+    };
+    let s = &app.nav;
+    let best = s
+        .candidates
+        .iter()
+        .find(|c| s.verdict(c) == Verdict::HashMatch)
+        .or_else(|| s.candidates.first());
+    let _ = p.peer.send_nav_status(dfdu_peer::NavStatus {
+        seq: s.seq,
+        best: best.map(|c| c.path.clone()),
+        candidates: s.candidates.len(),
+        verdict: best.map_or(Verdict::None, |c| s.verdict(c)),
+    });
+}
+pub(crate) fn jump<B: dfdu_scan::Backend>(
+    session: &mut dfdu_session::Session<'_, B, crate::app::App>,
+    path: &str,
+) {
+    let gone = session.go_to_path(path);
+    let _ = crate::overlay::goto::gone_to(session.front_mut(), gone);
 }

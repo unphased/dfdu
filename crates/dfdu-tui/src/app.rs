@@ -60,6 +60,8 @@ pub struct App {
     pub peer_prompt: Option<crate::input::line::LineInput>,
     #[cfg(unix)]
     pub(crate) peer_panel: Option<crate::peer::Panel>,
+    #[cfg(unix)]
+    pub(crate) nav: crate::peer::nav::State,
     pub theme: Theme,
     /// The terminal's colour level, which a theme chosen in the palette is resolved for. It
     /// can differ from the theme's own level: `mono` resolves without colours on any terminal.
@@ -107,6 +109,8 @@ impl App {
             peer_prompt: None,
             #[cfg(unix)]
             peer_panel: None,
+            #[cfg(unix)]
+            nav: crate::peer::nav::State::default(),
             color_level: theme.level(),
             background: theme.background(),
             theme,

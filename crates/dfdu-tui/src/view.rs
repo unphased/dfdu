@@ -108,6 +108,8 @@ pub fn draw(f: &mut Frame, app: &mut App, now: Instant) {
     }
     footer::status(f, app, status, list_view);
     footer::hints(f, app, footer);
+    #[cfg(unix)]
+    crate::peer::nav::draw(f, app);
 
     if let Some(pane) = pane {
         if crate::features::marks_pane::is_open(app) {

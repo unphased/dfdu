@@ -156,11 +156,15 @@ where
         .map_or_else(crossbeam_channel::never, |p| p.peer.events().clone());
     #[cfg(not(unix))]
     let peer_events = crossbeam_channel::never::<String>();
+    #[cfg(unix)]
+    let mut navigation = crate::peer::nav::Runtime::new();
     // The first frame is drawn at once.
     let mut input_dirty = true;
     loop {
         let now = Instant::now();
         let tick = session.tick(now)?;
+        #[cfg(unix)]
+        navigation.tick(session);
         // What the scanned host answered the go-to prompt, which the tick took in.
         let answered = goto::poll(session.front_mut());
         let motion_due = (session.front().motion.next_frame_at()).is_some_and(|t| now >= t);
@@ -200,7 +204,16 @@ where
         let panel_results = crate::peer::results(session.front());
         #[cfg(not(unix))]
         let panel_results = crossbeam_channel::never::<()>();
+        #[cfg(unix)]
+        let nav_results = navigation.workers.results.clone();
+        #[cfg(not(unix))]
+        let nav_results = crossbeam_channel::never::<()>();
         select! {
+            recv(nav_results) -> result => {
+                #[cfg(unix)]
+                if let Ok(result) = result { navigation.complete(session.front_mut(), result); }
+                input_dirty = true;
+            },
             recv(panel_results) -> result => {
                 #[cfg(unix)]
                 if let Ok(result) = result { crate::peer::complete(session.front_mut(), result); }
@@ -211,6 +224,24 @@ where
             recv(input) -> ev => match ev {
                 Ok(Event::Key(k)) => {
                     assert!(!inject_panic, "injected UI panic");
+                    #[cfg(unix)]
+                    if session.front().nav.focus || (k.code == ratatui::crossterm::event::KeyCode::Char('C') && !session.front().nav.candidates.is_empty()) {
+                        use ratatui::crossterm::event::KeyCode;
+                        let s = &mut session.front_mut().nav;
+                        match k.code {
+                            KeyCode::Esc => s.focus = false,
+                            KeyCode::Char('C') => s.focus = true,
+                            KeyCode::Char('j') | KeyCode::Down => s.cursor = (s.cursor + 1).min(s.candidates.len().saturating_sub(1)),
+                            KeyCode::Char('k') | KeyCode::Up => s.cursor = s.cursor.saturating_sub(1),
+                            KeyCode::Enter => {
+                                let path = s.candidates.get(s.cursor).map(|c| c.path.clone());
+                                if let Some(path) = path { crate::peer::nav::jump(session, &path); }
+                            }
+                            _ => {}
+                        }
+                        input_dirty = true;
+                        continue;
+                    }
                     let fx = session.front_mut().key(k, Instant::now());
                     handle_effects(session, fx);
                     if let Some(text) = goto::submitted(session.front_mut()) {
@@ -247,6 +278,18 @@ where
                         session.front_mut().session.status = Some(format!("peer: {error}"));
                     }
                     Ok(dfdu_peer::Event::Status(_)) => {}
+                    Ok(dfdu_peer::Event::Nav(nav)) => navigation.receive(session, nav),
+                    Ok(dfdu_peer::Event::NavHash(hash)) => {
+                        if hash.seq == session.front().nav.seq {
+                            session.front_mut().nav.expected = Some(hash.hash);
+                            crate::peer::nav::publish(session.front());
+                        }
+                    }
+                    Ok(dfdu_peer::Event::NavStatus(status)) => {
+                        if status.seq == session.front().nav.seq {
+                            session.front_mut().nav.footer = format!("{} {} {}", crate::peer::nav::mark(status.verdict), status.candidates, status.best.as_deref().unwrap_or(""));
+                        }
+                    }
                     Err(_) => peer_events = crossbeam_channel::never(),
                 }
                 #[cfg(not(unix))]

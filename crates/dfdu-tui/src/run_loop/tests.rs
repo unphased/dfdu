@@ -1,4 +1,6 @@
 //! A real decode through the loop, with terminal and graphics writes recorded in order.
+#[cfg(unix)]
+mod nav;
 
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
