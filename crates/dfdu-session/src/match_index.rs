@@ -1,4 +1,4 @@
-//! Matching regular files by apparent size.
+//! Lazy size and name indexes for peer matching.
 
 use std::collections::HashMap;
 
@@ -11,6 +11,8 @@ use dfdu_tree::{Ix, Kind, Tree};
 pub struct MatchIndex {
     version: Option<u64>,
     sizes: HashMap<u64, Vec<Ix>>,
+    names: HashMap<Vec<u8>, Vec<Ix>>,
+    directories: HashMap<Vec<u8>, Vec<Ix>>,
 }
 
 impl MatchIndex {
@@ -18,6 +20,89 @@ impl MatchIndex {
     pub fn clear(&mut self) {
         self.version = None;
         self.sizes.clear();
+        self.names.clear();
+        self.directories.clear();
+    }
+
+    fn rebuild(&mut self, tree: &Tree) {
+        if self.version == Some(tree.version()) {
+            return;
+        }
+        self.clear();
+        let mut stack: Vec<_> = tree.roots().collect();
+        while let Some(ix) = stack.pop() {
+            match tree.kind(ix) {
+                Kind::File => {
+                    self.sizes.entry(tree.raw_size(ix).0).or_default().push(ix);
+                    self.names
+                        .entry(tree.name(ix).to_vec())
+                        .or_default()
+                        .push(ix);
+                }
+                Kind::Dir => {
+                    let name = if tree.parent(ix).is_none() {
+                        tree.host_path(ix)
+                            .file_name()
+                            .unwrap_or(tree.name(ix))
+                            .to_vec()
+                    } else {
+                        tree.name(ix).to_vec()
+                    };
+                    self.directories.entry(name).or_default().push(ix);
+                    stack.extend(tree.children(ix));
+                }
+                _ => {}
+            }
+        }
+        self.version = Some(tree.version());
+    }
+
+    /// Files of the same size or name, or directories of the same name.
+    /// Ranks exact size and name first, then the matching nearest-parent prefix,
+    /// absolute mtime distance, and path bytes. Directory sizes are ignored.
+    #[allow(clippy::too_many_arguments)]
+    pub fn ranked_candidates(
+        &mut self,
+        tree: &Tree,
+        size: u64,
+        name: &[u8],
+        parents: &[&[u8]],
+        mtime: i64,
+        is_dir: bool,
+    ) -> Vec<Ix> {
+        self.rebuild(tree);
+        let mut candidates = if is_dir {
+            self.directories.get(name).cloned().unwrap_or_default()
+        } else {
+            let mut found = self.sizes.get(&size).cloned().unwrap_or_default();
+            found.extend(self.names.get(name).into_iter().flatten().copied());
+            found.sort_unstable();
+            found.dedup();
+            found
+        };
+        candidates.sort_unstable_by_key(|&ix| {
+            let mut parent = tree.parent(ix);
+            let matching = parents
+                .iter()
+                .take_while(|&&expected| {
+                    let Some(p) = parent else { return false };
+                    let matches = if tree.parent(p).is_none() {
+                        tree.host_path(p).file_name() == Some(expected)
+                    } else {
+                        tree.name(p) == expected
+                    };
+                    parent = tree.parent(p);
+                    matches
+                })
+                .count();
+            (
+                std::cmp::Reverse(!is_dir && tree.raw_size(ix).0 == size && tree.name(ix) == name),
+                std::cmp::Reverse(matching),
+                tree.mtime(ix).abs_diff(mtime),
+                tree.path(ix),
+            )
+        });
+        candidates
     }
 
     /// Files of `size`, ordered by exact `name`, then the length of the matching prefix of
@@ -30,17 +115,7 @@ impl MatchIndex {
         name: &[u8],
         parents: &[&[u8]],
     ) -> Vec<Ix> {
-        if self.version != Some(tree.version()) {
-            self.sizes.clear();
-            for root in tree.roots() {
-                tree.for_each_leaf(root, |ix| {
-                    if tree.kind(ix) == Kind::File {
-                        self.sizes.entry(tree.raw_size(ix).0).or_default().push(ix);
-                    }
-                });
-            }
-            self.version = Some(tree.version());
-        }
+        self.rebuild(tree);
         let mut ranked: Vec<_> = self
             .sizes
             .get(&size)
@@ -141,18 +216,46 @@ mod tests {
         let (mut f, root) = Fixture::new();
         let a = f.dir(root, "a");
         let b = f.dir(root, "b");
-        let exact =
-            f.m.tree
-                .add_file(b, b"file", &meta(Kind::File, 10, i64::MIN), true, None);
-        let near =
-            f.m.tree
-                .add_file(a, b"file", &meta(Kind::File, 20, 99), true, None);
-        let far =
-            f.m.tree
-                .add_file(a, b"other", &meta(Kind::File, 10, i64::MAX), true, None);
-        let tied =
-            f.m.tree
-                .add_file(a, b"z", &meta(Kind::File, 10, 99), true, None);
+        let exact = f.m.tree.add_file(
+            b,
+            b"file",
+            &dfdu_tree::Meta {
+                mtime: i64::MIN,
+                ..meta(Kind::File, 10, 1)
+            },
+            true,
+            None,
+        );
+        let near = f.m.tree.add_file(
+            a,
+            b"file",
+            &dfdu_tree::Meta {
+                mtime: 99,
+                ..meta(Kind::File, 20, 2)
+            },
+            true,
+            None,
+        );
+        let far = f.m.tree.add_file(
+            a,
+            b"other",
+            &dfdu_tree::Meta {
+                mtime: i64::MAX,
+                ..meta(Kind::File, 10, 3)
+            },
+            true,
+            None,
+        );
+        let tied = f.m.tree.add_file(
+            a,
+            b"z",
+            &dfdu_tree::Meta {
+                mtime: 99,
+                ..meta(Kind::File, 10, 4)
+            },
+            true,
+            None,
+        );
         f.file(a, "excluded", 30);
         let mut index = MatchIndex::default();
         assert_eq!(
