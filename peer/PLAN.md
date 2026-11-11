@@ -89,17 +89,18 @@ stateDiagram-v2
 ## Image preview
 
 When the highlighted file is a JPEG, PNG or ARW, dfdu draws a kitty graphics placement next
-to its row after each frame, with one fixed image id, and deletes it when the selection moves.
+to its row with one fixed image id, and deletes it when the selection moves.
 Both sides do this, so you can compare the pictures. The decoder is
 `~/.vim/jpg-preview`, split into a library and used as a path dependency.
 Layout is deliberately simple for now.
 
 ### Part C: UI wiring (complete)
 
-The Files view (including tree mode) previews local, nonimported files in kitty, outside tmux
-and screen. The list must be at least 40 columns wide. Placement starts in its right half,
-beside the selected row, and fits within the remaining list area, at most 40 by 12 cells.
-Other views, overlays and the debug panel hide it. Decode errors leave no image.
+The Files view (including tree mode) previews local, nonimported files in terminals detected
+as kitty graphics capable. `DFDU_IMAGE_PREVIEW=0` disables previews and `=1` forces them on.
+Placement starts after the displayed name and notes, beside the selected row, and is at most
+30 by 12 cells, clipped to the screen. Other views, overlays and the debug panel hide it.
+Decode errors leave no image.
 
 ```mermaid
 flowchart LR
@@ -113,12 +114,12 @@ flowchart LR
 
 The UI writes graphics only after drawing. One worker decodes at a time; rapid moves retain
 only the latest request, not a queue of old selections. Results carry the request and generation,
-so changing away and back cannot accept old work. Each unchanged frame reuses the completed
-stream. Selection or placement changes invalidate it. Quit, errors and reopen clear it; terminal
+so changing away and back cannot accept old work. Unchanged frames do not resend the stream.
+Selection or placement changes invalidate it. Quit, errors and reopen clear it; terminal
 restoration and the panic hook also delete the fixed id before leaving the alternate screen.
 A decoder still running at exit has no terminal writer and is not joined.
 
-Tests cover asynchronous work, cached redraws, stale results, resize, failure and local-only
+Tests cover asynchronous work, unchanged frames, stale results, resize, failure and local-only
 eligibility. A real PNG scan through the run loop checks completion wakeup, output after the
 frame flush, and deletion on selection, view, overlay, quit and the reopen/suspend boundary.
 No live kitty screenshot assertion is automated.
