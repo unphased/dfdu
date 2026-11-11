@@ -52,6 +52,12 @@ _dfdu() {
             dfdu,man)
                 cmd="dfdu__subcmd__man"
                 ;;
+            dfdu,peer-attach)
+                cmd="dfdu__subcmd__peer__subcmd__attach"
+                ;;
+            dfdu,peers)
+                cmd="dfdu__subcmd__peers"
+                ;;
             dfdu,recover)
                 cmd="dfdu__subcmd__recover"
                 ;;
@@ -118,6 +124,12 @@ _dfdu() {
             dfdu__subcmd__help,man)
                 cmd="dfdu__subcmd__help__subcmd__man"
                 ;;
+            dfdu__subcmd__help,peer-attach)
+                cmd="dfdu__subcmd__help__subcmd__peer__subcmd__attach"
+                ;;
+            dfdu__subcmd__help,peers)
+                cmd="dfdu__subcmd__help__subcmd__peers"
+                ;;
             dfdu__subcmd__help,recover)
                 cmd="dfdu__subcmd__help__subcmd__recover"
                 ;;
@@ -143,12 +155,20 @@ _dfdu() {
 
     case "${cmd}" in
         dfdu)
-            opts="-x -f -h -V --one-file-system --cross-mounts --network --mft --no-rules --disks --resume-from --file --read-only --remote --remote-agent --type --no-history --no-cache --theme --color --bars --no-mouse --debug-stats --help --version scan disks report clean diff history dupes export import recover cache man update completions agent help"
+            opts="-x -f -h -V --one-file-system --cross-mounts --network --mft --no-rules --peer --bind --peer-remote-bin --disks --resume-from --file --read-only --remote --remote-agent --type --no-history --no-cache --theme --color --bars --no-mouse --debug-stats --help --version peers peer-attach scan disks report clean diff history dupes export import recover cache man update completions agent help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --bind)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --peer-remote-bin)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --resume-from)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
@@ -485,7 +505,7 @@ _dfdu() {
             return 0
             ;;
         dfdu__subcmd__help)
-            opts="scan disks report clean diff history dupes export import recover cache man update completions agent help"
+            opts="peers peer-attach scan disks report clean diff history dupes export import recover cache man update completions agent help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -694,6 +714,34 @@ _dfdu() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
+        dfdu__subcmd__help__subcmd__peer__subcmd__attach)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        dfdu__subcmd__help__subcmd__peers)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
         dfdu__subcmd__help__subcmd__recover)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
@@ -792,6 +840,34 @@ _dfdu() {
             ;;
         dfdu__subcmd__man)
             opts="-h --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        dfdu__subcmd__peer__subcmd__attach)
+            opts="-h --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        dfdu__subcmd__peers)
+            opts="-h --json --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0

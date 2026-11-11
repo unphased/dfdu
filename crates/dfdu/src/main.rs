@@ -49,6 +49,7 @@ mod history;
 mod launch;
 mod matches;
 mod output;
+mod peer_cli;
 mod recover;
 mod remote;
 mod report;
@@ -87,6 +88,15 @@ struct Cli {
     mounts: MountArgs,
     #[command(flatten)]
     rules: RuleArgs,
+    /// Enable peer mode with a private local socket (B binds or unbinds).
+    #[arg(long, conflicts_with_all = ["remote", "import", "resume_from", "disks"])]
+    peer: bool,
+    /// Bind to ID, 'HOST ID' or HOST:ID at startup.
+    #[arg(long, value_name = "TARGET", requires = "peer")]
+    bind: Option<String>,
+    /// Remote dfdu executable for peer binding (expanded by the remote shell).
+    #[arg(long, default_value = "~/.local/bin/dfdu", requires = "peer")]
+    peer_remote_bin: String,
     /// Choose a disk to browse from the mounted filesystems.
     #[arg(long, conflicts_with = "paths")]
     disks: bool,
@@ -158,6 +168,14 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
+    /// List live peer-mode instances on this host, removing stale entries.
+    Peers {
+        /// Print instance metadata as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Bridge stdin and stdout to a local peer instance (used over ssh).
+    PeerAttach { id: String },
     /// Scan a directory and print a summary.
     Scan(scan::ScanArgs),
     /// List the mounted filesystems with their size and free space.
@@ -398,8 +416,14 @@ fn run(cli: Cli) -> Result<ExitCode, ExitCode> {
         eprintln!("dfdu: {message}");
         return Err(ExitCode::from(2));
     }
+    if cli.peer && (cli.cmd.is_some() || !std::io::stdout().is_terminal()) {
+        eprintln!("dfdu: --peer requires the interactive browser on a terminal");
+        return Err(ExitCode::from(2));
+    }
     let rules = || RuleArgs::default().load().ok_or(ExitCode::from(1));
     match cli.cmd {
+        Some(Cmd::Peers { json }) => peer_cli::list(json),
+        Some(Cmd::PeerAttach { id }) => peer_cli::attach(&id),
         Some(Cmd::Scan(args)) => scan::run(args),
         Some(Cmd::Disks) => disks::run(),
         Some(Cmd::Update(a)) => Ok(update::run(&a)),

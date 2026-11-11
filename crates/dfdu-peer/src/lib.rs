@@ -64,7 +64,10 @@ pub struct Instance {
 enum Frame {
     Hello(Hello),
     Ping {},
-    Bye {},
+    Bye {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reason: Option<String>,
+    },
 }
 #[derive(Serialize, Deserialize, Debug)]
 struct Hello {
@@ -304,8 +307,15 @@ impl Peer {
     /// Do not call from a raw signal handler; use a signal iterator or the application's event loop.
     pub fn cleanup_hook(&self) -> impl Fn() + Send + Sync + 'static {
         let control = self.control.clone();
+        let dir = self.dir.clone();
+        let id = self.instance.id.clone();
         move || {
             let _ = control.send(Control::Stop);
+            // Signal workers may terminate the process before the transport thread runs.
+            if let Ok(path) = socket(&dir, &id) {
+                let _ = fs::remove_file(path);
+            }
+            let _ = fs::remove_file(dir.join(format!("{id}.json")));
         }
     }
 }
@@ -535,7 +545,11 @@ impl Link {
                                 peer = Some(format!("{host}/{id}"));
                             }
                             Frame::Ping {} if self.ready => {}
-                            Frame::Bye {} => return Err(error("peer disconnected")),
+                            Frame::Bye { reason } => {
+                                return Err(error(
+                                    reason.unwrap_or_else(|| "peer disconnected".into()),
+                                ));
+                            }
                             _ => return Err(error("invalid peer handshake or protocol")),
                         }
                         self.last = Instant::now();
@@ -597,14 +611,14 @@ fn run(
             match control {
                 Control::Stop => {
                     if let Some(link) = &mut link {
-                        link.queue(Frame::Bye {});
+                        link.queue(Frame::Bye { reason: None });
                         let _ = link.flush();
                     }
                     return;
                 }
                 Control::Unbind => {
                     if let Some(link) = &mut link {
-                        link.queue(Frame::Bye {});
+                        link.queue(Frame::Bye { reason: None });
                         let _ = link.flush();
                     }
                     link = None;
@@ -650,7 +664,9 @@ fn run(
                 }
                 Ok((mut stream, _)) => {
                     let _ = stream.set_nonblocking(true);
-                    let _ = stream.write_all(b"{\"bye\":{}}\n");
+                    let _ = stream.write_all(
+                        b"{\"bye\":{\"reason\":\"peer is already bound or connecting\"}}\n",
+                    );
                 }
                 Err(_) => break,
             }

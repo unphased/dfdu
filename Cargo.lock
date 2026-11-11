@@ -1325,6 +1325,7 @@ dependencies = [
  "dfdu-dupes",
  "dfdu-engine",
  "dfdu-hangfs",
+ "dfdu-peer",
  "dfdu-rules",
  "dfdu-scan",
  "dfdu-session",
@@ -1338,6 +1339,7 @@ dependencies = [
  "lzma-rust2",
  "rustix 1.1.6",
  "serde_json",
+ "signal-hook",
  "tar",
  "tempfile",
 ]

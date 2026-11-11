@@ -28,8 +28,49 @@ Keys follow ncdu. Press `?` in the app for the full list.
 | `o` `y` | Open in file manager, copy path | `D` | Delete permanently |
 | `r` | Rescan | `q` | Quit |
 | `Ctrl-G` | Go to a folder | `?` | All keys |
+| `B` | Bind or unbind (peer mode) | | |
 
 Unreadable entries are marked `!` with the reason. Press `!` to list them all.
+
+## Peer mode (Unix)
+
+Start two independent browsers with `dfdu --peer PATH`. Each gets a short random ID.
+Press `B` in the browser that should become master, type the other ID, then Enter.
+For another host, type `HOST ID` or `HOST:ID`. Press `B` again on either side to unbind;
+Escape cancels the prompt. The footer shows the local ID when unbound, or the role and
+partner's host/ID when bound. A second binder is refused. Connection errors appear in the
+status line. Browsing remains independent: navigation sync, discovery and role swapping
+are not implemented yet.
+
+```sh
+dfdu peers                    # list live instances on this host
+dfdu peers --json             # metadata for scripts
+dfdu --peer --bind ab12cd34 /backup
+dfdu --peer --bind 'nas ab12cd34' /source
+dfdu --peer --peer-remote-bin /opt/bin/dfdu /source
+make install                  # copy the release binary to ~/.local/bin/dfdu
+```
+
+Local binding opens the instance's Unix socket directly. Remote binding runs
+`ssh -T -o BatchMode=yes HOST ~/.local/bin/dfdu peer-attach ID`. Install this fork on both
+hosts. The fixed binary path avoids an unrelated upstream dfdu on the remote PATH.
+`--peer-remote-bin` overrides it; the remote shell expands a leading `~/`.
+`DFDU_SSH` can select another ssh executable, mainly for testing. Authentication and
+host-key checks use your normal ssh configuration. There is no TCP listener.
+
+Registrations live in `~/.local/state/dfdu/peers/`, independent of the temporary and XDG
+runtime directories. The directory is owner-only (`0700`), sockets and JSON metadata are
+`0600`. Metadata contains ID, hostname, PID, roots, start time (Unix seconds) and role.
+Normal exit, panic and termination signals clean registrations; `dfdu peers` also removes
+stale entries. SIGKILL cannot run cleanup. A socket path longer than 103 bytes is refused
+with a clear error. On macOS a refused endpoint with a still-live PID is retained because a
+full listener backlog can also refuse connections.
+
+`dfdu peer-attach ID` bridges standard input/output to the local socket and stops when
+either side closes. It is the remote ssh entry point, not an interactive browser.
+The stream uses bounded newline-delimited JSON, a version-1 hello, heartbeats and bye.
+Connections time out after ten seconds without a valid frame. No paths or navigation
+requests are sent in this phase.
 
 ## Views
 

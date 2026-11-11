@@ -18,6 +18,8 @@ set edit:completion:arg-completer[dfdu] = {|@words|
     }
     var completions = [
         &'dfdu'= {
+            cand --bind 'Bind to ID, ''HOST ID'' or HOST:ID at startup'
+            cand --peer-remote-bin 'Remote dfdu executable for peer binding (expanded by the remote shell)'
             cand --resume-from 'Open the scan saved in FILE (a snapshot or an ncdu export) at once, and rescan its directory in the background, replacing it when done. A snapshot is rescanned with the mount options it was taken with'
             cand -f 'Browse a scan saved in FILE (a snapshot, an ncdu JSON export, plain or zstd, or an ncdu binary export from `ncdu -O`; `-` for stdin), read-only'
             cand --file 'Browse a scan saved in FILE (a snapshot, an ncdu JSON export, plain or zstd, or an ncdu binary export from `ncdu -O`; `-` for stdin), read-only'
@@ -33,6 +35,7 @@ set edit:completion:arg-completer[dfdu] = {|@words|
             cand --network 'Descend into network filesystems (NFS, SMB, sshfs and other FUSE network mounts); with or without --cross-mounts'
             cand --mft 'Windows, as administrator: read each NTFS volume''s master file table instead of listing its directories, which is much faster on large volumes. Volumes whose table cannot be read are listed as usual'
             cand --no-rules 'Do not classify entries: no categories, no cleanup candidates'
+            cand --peer 'Enable peer mode with a private local socket (B binds or unbinds)'
             cand --disks 'Choose a disk to browse from the mounted filesystems'
             cand --read-only 'Never delete anything: the browser leaves out its delete keys and runs cleanup commands only as dry runs'
             cand --no-history 'Do not record the scan in the history, nor show what grew since the last one'
@@ -43,6 +46,8 @@ set edit:completion:arg-completer[dfdu] = {|@words|
             cand --help 'Print help (see more with ''--help'')'
             cand -V 'Print version'
             cand --version 'Print version'
+            cand peers 'List live peer-mode instances on this host, removing stale entries'
+            cand peer-attach 'Bridge stdin and stdout to a local peer instance (used over ssh)'
             cand scan 'Scan a directory and print a summary'
             cand disks 'List the mounted filesystems with their size and free space'
             cand report 'Scan a directory and list what the cleanup rules found in it: caches, build output, dependencies, with how safe each is to delete'
@@ -59,6 +64,15 @@ set edit:completion:arg-completer[dfdu] = {|@words|
             cand completions 'Print a shell completion script (bash, zsh, fish, elvish, powershell)'
             cand agent 'Scan for a dfdu on another host (`--remote`): reads requests on stdin and writes what it finds to stdout in dfdu''s wire format. Not for use by hand'
             cand help 'Print this message or the help of the given subcommand(s)'
+        }
+        &'dfdu;peers'= {
+            cand --json 'Print instance metadata as JSON'
+            cand -h 'Print help'
+            cand --help 'Print help'
+        }
+        &'dfdu;peer-attach'= {
+            cand -h 'Print help'
+            cand --help 'Print help'
         }
         &'dfdu;scan'= {
             cand --format 'Output: table (for people), json (one document, schema/scan.v1.json), ndjson (one record per line, for large trees) or ncdu (ncdu''s JSON export)'
@@ -244,6 +258,8 @@ set edit:completion:arg-completer[dfdu] = {|@words|
             cand --help 'Print help'
         }
         &'dfdu;help'= {
+            cand peers 'List live peer-mode instances on this host, removing stale entries'
+            cand peer-attach 'Bridge stdin and stdout to a local peer instance (used over ssh)'
             cand scan 'Scan a directory and print a summary'
             cand disks 'List the mounted filesystems with their size and free space'
             cand report 'Scan a directory and list what the cleanup rules found in it: caches, build output, dependencies, with how safe each is to delete'
@@ -260,6 +276,10 @@ set edit:completion:arg-completer[dfdu] = {|@words|
             cand completions 'Print a shell completion script (bash, zsh, fish, elvish, powershell)'
             cand agent 'Scan for a dfdu on another host (`--remote`): reads requests on stdin and writes what it finds to stdout in dfdu''s wire format. Not for use by hand'
             cand help 'Print this message or the help of the given subcommand(s)'
+        }
+        &'dfdu;help;peers'= {
+        }
+        &'dfdu;help;peer-attach'= {
         }
         &'dfdu;help;scan'= {
         }

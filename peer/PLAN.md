@@ -26,9 +26,11 @@ flowchart LR
 ## Transport: always ssh
 
 There is no network listener. Each instance in peer mode listens only on a Unix socket that
-only you can open (`0600`, in the runtime or state directory, one per instance).
+only you can open (`0600`, in `~/.local/state/dfdu/peers/`, one per instance).
+The directory is `0700`, fixed so a non-interactive ssh shell can find it.
 
-- **Remote peer:** the master runs `ssh -T -o BatchMode=yes HOST dfdu peer-attach ID`. The
+- **Remote peer:** the master runs `ssh -T -o BatchMode=yes HOST ~/.local/bin/dfdu peer-attach ID`.
+  `--peer-remote-bin` overrides the executable; `DFDU_SSH` overrides ssh for tests. The
   `peer-attach` subcommand connects that socket to stdin and stdout. Your ssh setup does the
   authentication: keys, host-key checks, `~/.ssh/config`.
 - **Same host:** the master connects to the socket directly. Going through ssh would end at
@@ -145,9 +147,19 @@ Each phase starts with failing tests in their own commit, then green commits at 
 
 1. **Base + image preview.** Carry over the match index and multiple roots. Split jpg-preview
    into a library. Kitty placement next to image rows.
-2. **Peer mode and transport.** Unix socket listener, `dfdu peer-attach`, `dfdu peers --json`,
-   binding the same host and over ssh, unbind. Two-instance tests on one machine through the
-   same code path.
+2. **Peer mode and transport (complete).** `--peer [PATH]...` registers an eight-hex-digit
+   random ID. `dfdu peers [--json]` lists live instances; `dfdu peer-attach ID` bridges stdio.
+   `--bind TARGET` or `B` binds to `ID`, `HOST ID` or `HOST:ID`; `B` unbinds either side.
+   The footer shows role and partner. No navigation, discovery or swap yet.
+   NDJSON frames are `{"hello":{"proto":1,"id":"...","host":"...","role":"master"}}`,
+   answered with role `slave`, then `{"ping":{}}` or `{"bye":{}}`. Lines are at most
+   64 KiB; ten seconds without a valid frame disconnects. Another binder is refused with
+   `{"bye":{"reason":"peer is already bound or connecting"}}`.
+   All I/O is on transport workers; events enter the TUI's existing select loop.
+   Registration cleanup handles Drop, panic and termination signals. SIGKILL leaves stale
+   entries for the next listing. On macOS refused sockets with live PIDs are retained:
+   a full live backlog also reports refusal, so deleting it would break the live instance.
+   Local and fake-SSH two-instance tests exercise the same connection path.
 3. **Discovery.** UDP probe and beacon, tailnet unicast, the peers panel, manual entry.
 4. **Nav and matching.** Nav events, the candidate list view, parallel sampled hashes,
    re-match after a scan.

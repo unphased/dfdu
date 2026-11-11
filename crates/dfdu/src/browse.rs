@@ -30,6 +30,26 @@ pub fn run(cli: Cli) -> Result<ExitCode, ExitCode> {
     if paths.is_empty() {
         paths.push(PathBuf::from("."));
     }
+    #[cfg(unix)]
+    let peer = if cli.peer {
+        Some(crate::peer_cli::start(
+            &paths,
+            cli.bind.as_deref(),
+            cli.peer_remote_bin.clone(),
+        )?)
+    } else {
+        None
+    };
+    #[cfg(unix)]
+    let _peer_signals = peer
+        .as_ref()
+        .map(|options| crate::peer_cli::signals(&options.peer))
+        .transpose()?;
+    #[cfg(not(unix))]
+    if cli.peer {
+        eprintln!("dfdu: peer mode requires Unix");
+        return Err(ExitCode::from(2));
+    }
     let multi = paths.len() > 1;
     let path = paths[0].clone();
     let mut reopen = None;
@@ -117,6 +137,8 @@ pub fn run(cli: Cli) -> Result<ExitCode, ExitCode> {
         }
     };
     let opts = dfdu_tui::RunOptions {
+        #[cfg(unix)]
+        peer,
         source,
         engine,
         history: !multi && !cli.no_history && cli.import.is_none(),

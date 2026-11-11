@@ -23,10 +23,10 @@ fn pair_bind_refuse_unbind_and_cleanup() {
     wait(&a, Role::Master);
     wait(&b, Role::Slave);
     c.bind(b.id(), "unused").unwrap();
-    assert!(matches!(
-        c.events().recv_timeout(Duration::from_secs(4)).unwrap(),
-        dfdu_peer::Event::Error(_)
-    ));
+    match c.events().recv_timeout(Duration::from_secs(4)).unwrap() {
+        dfdu_peer::Event::Error(message) => assert!(message.contains("already bound"), "{message}"),
+        other => panic!("expected refusal, got {other:?}"),
+    }
     assert_eq!(b.status().role, Role::Slave);
     a.unbind();
     wait(&a, Role::Unbound);

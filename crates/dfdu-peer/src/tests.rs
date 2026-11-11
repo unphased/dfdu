@@ -54,7 +54,7 @@ fn exact_wire_envelopes() {
         "{\"hello\":{\"proto\":1,\"id\":\"abcdef12\",\"host\":\"actual-host\",\"role\":\"master\"}}\n"
     );
     assert_eq!(
-        serde_json::to_string(&Frame::Bye {}).unwrap(),
+        serde_json::to_string(&Frame::Bye { reason: None }).unwrap(),
         "{\"bye\":{}}"
     );
     assert_eq!(

@@ -1,4 +1,4 @@
-.PHONY: all test clean-debug
+.PHONY: all test install clean-debug
 
 all:
 	cargo build --release -p dfdu
@@ -9,6 +9,10 @@ test:
 	else \
 		cargo test -p dfdu-session -p dfdu-tui; \
 	fi
+
+install:
+	mkdir -p "$(HOME)/.local/bin"
+	cp target/release/dfdu "$(HOME)/.local/bin/dfdu"
 
 # Cargo never removes stale build outputs; this drops them all (release stays).
 clean-debug:

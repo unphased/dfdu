@@ -15,6 +15,8 @@ _dfdu() {
 
     local context curcontext="$curcontext" state line
     _arguments "${_arguments_options[@]}" : \
+'--bind=[Bind to ID, '\''HOST ID'\'' or HOST\:ID at startup]:TARGET:_default' \
+'--peer-remote-bin=[Remote dfdu executable for peer binding (expanded by the remote shell)]:PEER_REMOTE_BIN:_default' \
 '(--disks -f --file)--resume-from=[Open the scan saved in FILE (a snapshot or an ncdu export) at once, and rescan its directory in the background, replacing it when done. A snapshot is rescanned with the mount options it was taken with]:FILE:_files' \
 '(--disks)-f+[Browse a scan saved in FILE (a snapshot, an ncdu JSON export, plain or zstd, or an ncdu binary export from \`ncdu -O\`; \`-\` for stdin), read-only]:FILE:_files' \
 '(--disks)--file=[Browse a scan saved in FILE (a snapshot, an ncdu JSON export, plain or zstd, or an ncdu binary export from \`ncdu -O\`; \`-\` for stdin), read-only]:FILE:_files' \
@@ -32,6 +34,7 @@ upload\:"One sent earlier, else send one, without asking"))' \
 '--network[Descend into network filesystems (NFS, SMB, sshfs and other FUSE network mounts); with or without --cross-mounts]' \
 '--mft[Windows, as administrator\: read each NTFS volume'\''s master file table instead of listing its directories, which is much faster on large volumes. Volumes whose table cannot be read are listed as usual]' \
 '--no-rules[Do not classify entries\: no categories, no cleanup candidates]' \
+'(--remote -f --file --resume-from --disks)--peer[Enable peer mode with a private local socket (B binds or unbinds)]' \
 '()--disks[Choose a disk to browse from the mounted filesystems]' \
 '--read-only[Never delete anything\: the browser leaves out its delete keys and runs cleanup commands only as dry runs]' \
 '--no-history[Do not record the scan in the history, nor show what grew since the last one]' \
@@ -52,7 +55,21 @@ upload\:"One sent earlier, else send one, without asking"))' \
         (( CURRENT += 1 ))
         curcontext="${curcontext%:*:*}:dfdu-command-$line[2]:"
         case $line[2] in
-            (scan)
+            (peers)
+_arguments "${_arguments_options[@]}" : \
+'--json[Print instance metadata as JSON]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(peer-attach)
+_arguments "${_arguments_options[@]}" : \
+'-h[Print help]' \
+'--help[Print help]' \
+':id:_default' \
+&& ret=0
+;;
+(scan)
 _arguments "${_arguments_options[@]}" : \
 '--format=[Output\: table (for people), json (one document, schema/scan.v1.json), ndjson (one record per line, for large trees) or ncdu (ncdu'\''s JSON export)]:FORMAT:(table json ndjson ncdu)' \
 '--depth=[Levels of directories to print below the root \[default\: 1; every level for ndjson\]]:DEPTH:_default' \
@@ -321,7 +338,15 @@ _arguments "${_arguments_options[@]}" : \
         (( CURRENT += 1 ))
         curcontext="${curcontext%:*:*}:dfdu-help-command-$line[1]:"
         case $line[1] in
-            (scan)
+            (peers)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(peer-attach)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(scan)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
@@ -417,6 +442,8 @@ esac
 (( $+functions[_dfdu_commands] )) ||
 _dfdu_commands() {
     local commands; commands=(
+'peers:List live peer-mode instances on this host, removing stale entries' \
+'peer-attach:Bridge stdin and stdout to a local peer instance (used over ssh)' \
 'scan:Scan a directory and print a summary' \
 'disks:List the mounted filesystems with their size and free space' \
 'report:Scan a directory and list what the cleanup rules found in it\: caches, build output, dependencies, with how safe each is to delete' \
@@ -517,6 +544,8 @@ _dfdu__subcmd__export_commands() {
 (( $+functions[_dfdu__subcmd__help_commands] )) ||
 _dfdu__subcmd__help_commands() {
     local commands; commands=(
+'peers:List live peer-mode instances on this host, removing stale entries' \
+'peer-attach:Bridge stdin and stdout to a local peer instance (used over ssh)' \
 'scan:Scan a directory and print a summary' \
 'disks:List the mounted filesystems with their size and free space' \
 'report:Scan a directory and list what the cleanup rules found in it\: caches, build output, dependencies, with how safe each is to delete' \
@@ -609,6 +638,16 @@ _dfdu__subcmd__help__subcmd__man_commands() {
     local commands; commands=()
     _describe -t commands 'dfdu help man commands' commands "$@"
 }
+(( $+functions[_dfdu__subcmd__help__subcmd__peer-attach_commands] )) ||
+_dfdu__subcmd__help__subcmd__peer-attach_commands() {
+    local commands; commands=()
+    _describe -t commands 'dfdu help peer-attach commands' commands "$@"
+}
+(( $+functions[_dfdu__subcmd__help__subcmd__peers_commands] )) ||
+_dfdu__subcmd__help__subcmd__peers_commands() {
+    local commands; commands=()
+    _describe -t commands 'dfdu help peers commands' commands "$@"
+}
 (( $+functions[_dfdu__subcmd__help__subcmd__recover_commands] )) ||
 _dfdu__subcmd__help__subcmd__recover_commands() {
     local commands; commands=()
@@ -643,6 +682,16 @@ _dfdu__subcmd__import_commands() {
 _dfdu__subcmd__man_commands() {
     local commands; commands=()
     _describe -t commands 'dfdu man commands' commands "$@"
+}
+(( $+functions[_dfdu__subcmd__peer-attach_commands] )) ||
+_dfdu__subcmd__peer-attach_commands() {
+    local commands; commands=()
+    _describe -t commands 'dfdu peer-attach commands' commands "$@"
+}
+(( $+functions[_dfdu__subcmd__peers_commands] )) ||
+_dfdu__subcmd__peers_commands() {
+    local commands; commands=()
+    _describe -t commands 'dfdu peers commands' commands "$@"
 }
 (( $+functions[_dfdu__subcmd__recover_commands] )) ||
 _dfdu__subcmd__recover_commands() {

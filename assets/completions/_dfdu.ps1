@@ -21,6 +21,8 @@ Register-ArgumentCompleter -Native -CommandName 'dfdu' -ScriptBlock {
 
     $completions = @(switch ($command) {
         'dfdu' {
+            [CompletionResult]::new('--bind', '--bind', [CompletionResultType]::ParameterName, 'Bind to ID, ''HOST ID'' or HOST:ID at startup')
+            [CompletionResult]::new('--peer-remote-bin', '--peer-remote-bin', [CompletionResultType]::ParameterName, 'Remote dfdu executable for peer binding (expanded by the remote shell)')
             [CompletionResult]::new('--resume-from', '--resume-from', [CompletionResultType]::ParameterName, 'Open the scan saved in FILE (a snapshot or an ncdu export) at once, and rescan its directory in the background, replacing it when done. A snapshot is rescanned with the mount options it was taken with')
             [CompletionResult]::new('-f', '-f', [CompletionResultType]::ParameterName, 'Browse a scan saved in FILE (a snapshot, an ncdu JSON export, plain or zstd, or an ncdu binary export from `ncdu -O`; `-` for stdin), read-only')
             [CompletionResult]::new('--file', '--file', [CompletionResultType]::ParameterName, 'Browse a scan saved in FILE (a snapshot, an ncdu JSON export, plain or zstd, or an ncdu binary export from `ncdu -O`; `-` for stdin), read-only')
@@ -36,6 +38,7 @@ Register-ArgumentCompleter -Native -CommandName 'dfdu' -ScriptBlock {
             [CompletionResult]::new('--network', '--network', [CompletionResultType]::ParameterName, 'Descend into network filesystems (NFS, SMB, sshfs and other FUSE network mounts); with or without --cross-mounts')
             [CompletionResult]::new('--mft', '--mft', [CompletionResultType]::ParameterName, 'Windows, as administrator: read each NTFS volume''s master file table instead of listing its directories, which is much faster on large volumes. Volumes whose table cannot be read are listed as usual')
             [CompletionResult]::new('--no-rules', '--no-rules', [CompletionResultType]::ParameterName, 'Do not classify entries: no categories, no cleanup candidates')
+            [CompletionResult]::new('--peer', '--peer', [CompletionResultType]::ParameterName, 'Enable peer mode with a private local socket (B binds or unbinds)')
             [CompletionResult]::new('--disks', '--disks', [CompletionResultType]::ParameterName, 'Choose a disk to browse from the mounted filesystems')
             [CompletionResult]::new('--read-only', '--read-only', [CompletionResultType]::ParameterName, 'Never delete anything: the browser leaves out its delete keys and runs cleanup commands only as dry runs')
             [CompletionResult]::new('--no-history', '--no-history', [CompletionResultType]::ParameterName, 'Do not record the scan in the history, nor show what grew since the last one')
@@ -46,6 +49,8 @@ Register-ArgumentCompleter -Native -CommandName 'dfdu' -ScriptBlock {
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             [CompletionResult]::new('-V', '-V ', [CompletionResultType]::ParameterName, 'Print version')
             [CompletionResult]::new('--version', '--version', [CompletionResultType]::ParameterName, 'Print version')
+            [CompletionResult]::new('peers', 'peers', [CompletionResultType]::ParameterValue, 'List live peer-mode instances on this host, removing stale entries')
+            [CompletionResult]::new('peer-attach', 'peer-attach', [CompletionResultType]::ParameterValue, 'Bridge stdin and stdout to a local peer instance (used over ssh)')
             [CompletionResult]::new('scan', 'scan', [CompletionResultType]::ParameterValue, 'Scan a directory and print a summary')
             [CompletionResult]::new('disks', 'disks', [CompletionResultType]::ParameterValue, 'List the mounted filesystems with their size and free space')
             [CompletionResult]::new('report', 'report', [CompletionResultType]::ParameterValue, 'Scan a directory and list what the cleanup rules found in it: caches, build output, dependencies, with how safe each is to delete')
@@ -62,6 +67,17 @@ Register-ArgumentCompleter -Native -CommandName 'dfdu' -ScriptBlock {
             [CompletionResult]::new('completions', 'completions', [CompletionResultType]::ParameterValue, 'Print a shell completion script (bash, zsh, fish, elvish, powershell)')
             [CompletionResult]::new('agent', 'agent', [CompletionResultType]::ParameterValue, 'Scan for a dfdu on another host (`--remote`): reads requests on stdin and writes what it finds to stdout in dfdu''s wire format. Not for use by hand')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
+            break
+        }
+        'dfdu;peers' {
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Print instance metadata as JSON')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'dfdu;peer-attach' {
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
         }
         'dfdu;scan' {
@@ -269,6 +285,8 @@ Register-ArgumentCompleter -Native -CommandName 'dfdu' -ScriptBlock {
             break
         }
         'dfdu;help' {
+            [CompletionResult]::new('peers', 'peers', [CompletionResultType]::ParameterValue, 'List live peer-mode instances on this host, removing stale entries')
+            [CompletionResult]::new('peer-attach', 'peer-attach', [CompletionResultType]::ParameterValue, 'Bridge stdin and stdout to a local peer instance (used over ssh)')
             [CompletionResult]::new('scan', 'scan', [CompletionResultType]::ParameterValue, 'Scan a directory and print a summary')
             [CompletionResult]::new('disks', 'disks', [CompletionResultType]::ParameterValue, 'List the mounted filesystems with their size and free space')
             [CompletionResult]::new('report', 'report', [CompletionResultType]::ParameterValue, 'Scan a directory and list what the cleanup rules found in it: caches, build output, dependencies, with how safe each is to delete')
@@ -285,6 +303,12 @@ Register-ArgumentCompleter -Native -CommandName 'dfdu' -ScriptBlock {
             [CompletionResult]::new('completions', 'completions', [CompletionResultType]::ParameterValue, 'Print a shell completion script (bash, zsh, fish, elvish, powershell)')
             [CompletionResult]::new('agent', 'agent', [CompletionResultType]::ParameterValue, 'Scan for a dfdu on another host (`--remote`): reads requests on stdin and writes what it finds to stdout in dfdu''s wire format. Not for use by hand')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
+            break
+        }
+        'dfdu;help;peers' {
+            break
+        }
+        'dfdu;help;peer-attach' {
             break
         }
         'dfdu;help;scan' {

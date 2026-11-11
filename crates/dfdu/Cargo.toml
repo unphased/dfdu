@@ -49,6 +49,10 @@ crossbeam-channel.workspace = true
 lzma-rust2 = { workspace = true, features = ["encoder"] }
 tar.workspace = true
 
+[target.'cfg(unix)'.dependencies]
+dfdu-peer = { path = "../dfdu-peer" }
+signal-hook = "0.3.18"
+
 [target.'cfg(unix)'.dev-dependencies]
 rustix = { workspace = true, features = ["pty", "termios"] }
 

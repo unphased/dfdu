@@ -57,6 +57,10 @@ struct Browser {
 impl Browser {
     /// Starts the browser on `tree` and waits for its first frame.
     fn start(tree: &Path, state: &Path, panic_on_key: bool) -> Browser {
+        Self::start_options(tree, state, panic_on_key, false)
+    }
+
+    fn start_options(tree: &Path, state: &Path, panic_on_key: bool, peer: bool) -> Browser {
         let master = openpt(OpenptFlags::RDWR | OpenptFlags::NOCTTY).unwrap();
         grantpt(&master).unwrap();
         unlockpt(&master).unwrap();
@@ -89,6 +93,9 @@ impl Browser {
             .stderr(Stdio::from(slave.try_clone().unwrap()));
         if panic_on_key {
             cmd.env("DFDU_TEST_UI_PANIC", "1");
+        }
+        if peer {
+            cmd.arg("--peer").env("HOME", state);
         }
         let child = cmd.spawn().unwrap();
 
@@ -228,6 +235,47 @@ fn ui_panic_restores_terminal_and_writes_crash_file() {
         "Close {",
     ] {
         assert!(report.contains(want), "{want:?} missing from:\n{report}");
+    }
+}
+
+#[test]
+fn peer_registration_is_removed_on_quit_panic_and_termination_signals() {
+    for mode in ["quit", "panic", "term", "hup", "int"] {
+        let tmp = tempfile::Builder::new()
+            .prefix("dp-")
+            .tempdir_in("/tmp")
+            .unwrap();
+        let tree = tree(tmp.path());
+        let state = tmp.path().join("state");
+        let mut browser = Browser::start_options(&tree, &state, mode == "panic", true);
+        let peers = state.join(".local/state/dfdu/peers");
+        assert_eq!(fs::read_dir(&peers).unwrap().count(), 2, "{mode}");
+        match mode {
+            "quit" => {
+                browser.press(b"q");
+                assert!(browser.wait().success());
+            }
+            "panic" => {
+                browser.press(b"x");
+                assert!(!browser.wait().success());
+            }
+            _ => {
+                let signal = match mode {
+                    "term" => rustix::process::Signal::TERM,
+                    "hup" => rustix::process::Signal::HUP,
+                    _ => rustix::process::Signal::INT,
+                };
+                rustix::process::kill_process(
+                    rustix::process::Pid::from_raw(browser.child.id() as i32).unwrap(),
+                    signal,
+                )
+                .unwrap();
+                wait_until("signal termination", Duration::from_secs(5), || {
+                    browser.child.try_wait().unwrap().is_some()
+                });
+            }
+        }
+        assert_eq!(fs::read_dir(&peers).unwrap().count(), 0, "{mode}");
     }
 }
 

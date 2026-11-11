@@ -37,10 +37,14 @@ pub(crate) fn status_text(id: &str, status: &dfdu_peer::Status) -> String {
     };
     format!(
         "peer {id} {role}{}",
-        status
-            .peer
-            .as_ref()
-            .map_or_else(String::new, |p| format!(" → {p}"))
+        status.peer.as_ref().map_or_else(String::new, |p| {
+            let arrow = if status.role == dfdu_peer::Role::Slave {
+                "←"
+            } else {
+                "→"
+            };
+            format!(" {arrow} {p}")
+        })
     )
 }
 

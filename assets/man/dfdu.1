@@ -4,7 +4,7 @@
 .SH NAME
 dfdu \- Disk usage browser for the terminal
 .SH SYNOPSIS
-\fBdfdu\fR [\fB\-x\fR|\fB\-\-one\-file\-system\fR] [\fB\-\-cross\-mounts\fR] [\fB\-\-network\fR] [\fB\-\-mft\fR] [\fB\-\-no\-rules\fR] [\fB\-\-disks\fR] [\fB\-\-resume\-from\fR] [\fB\-f\fR|\fB\-\-file\fR] [\fB\-\-read\-only\fR] [\fB\-\-remote\fR] [\fB\-\-remote\-agent\fR] [\fB\-\-type\fR] [\fB\-\-no\-history\fR] [\fB\-\-no\-cache\fR] [\fB\-\-theme\fR] [\fB\-\-color\fR] [\fB\-\-bars\fR] [\fB\-\-no\-mouse\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIPATH\fR] [\fIsubcommands\fR]
+\fBdfdu\fR [\fB\-x\fR|\fB\-\-one\-file\-system\fR] [\fB\-\-cross\-mounts\fR] [\fB\-\-network\fR] [\fB\-\-mft\fR] [\fB\-\-no\-rules\fR] [\fB\-\-peer\fR] [\fB\-\-bind\fR] [\fB\-\-peer\-remote\-bin\fR] [\fB\-\-disks\fR] [\fB\-\-resume\-from\fR] [\fB\-f\fR|\fB\-\-file\fR] [\fB\-\-read\-only\fR] [\fB\-\-remote\fR] [\fB\-\-remote\-agent\fR] [\fB\-\-type\fR] [\fB\-\-no\-history\fR] [\fB\-\-no\-cache\fR] [\fB\-\-theme\fR] [\fB\-\-color\fR] [\fB\-\-bars\fR] [\fB\-\-no\-mouse\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIPATH\fR] [\fIsubcommands\fR]
 .SH DESCRIPTION
 Disk usage browser for the terminal
 .SH OPTIONS
@@ -23,6 +23,15 @@ Windows, as administrator: read each NTFS volume\*(Aqs master file table instead
 .TP
 \fB\-\-no\-rules\fR
 Do not classify entries: no categories, no cleanup candidates
+.TP
+\fB\-\-peer\fR
+Enable peer mode with a private local socket (B binds or unbinds)
+.TP
+\fB\-\-bind\fR \fI<TARGET>\fR
+Bind to ID, \*(AqHOST ID\*(Aq or HOST:ID at startup
+.TP
+\fB\-\-peer\-remote\-bin\fR \fI<PEER_REMOTE_BIN>\fR [default: ~/.local/bin/dfdu]
+Remote dfdu executable for peer binding (expanded by the remote shell)
 .TP
 \fB\-\-disks\fR
 Choose a disk to browse from the mounted filesystems
@@ -84,6 +93,12 @@ Print version
 [\fIPATH\fR]
 Directories to browse (opens the interactive browser when stdout is a terminal)
 .SH SUBCOMMANDS
+.TP
+dfdu\-peers(1)
+List live peer\-mode instances on this host, removing stale entries
+.TP
+dfdu\-peer\-attach(1)
+Bridge stdin and stdout to a local peer instance (used over ssh)
 .TP
 dfdu\-scan(1)
 Scan a directory and print a summary
