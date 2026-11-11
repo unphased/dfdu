@@ -51,7 +51,12 @@ impl MatchIndex {
                 let mut matching = 0;
                 for expected in parents {
                     let Some(p) = parent else { break };
-                    if tree.name(p) != *expected {
+                    let matches = if tree.parent(p).is_none() {
+                        tree.host_path(p).file_name() == Some(*expected)
+                    } else {
+                        tree.name(p) == *expected
+                    };
+                    if !matches {
                         break;
                     }
                     matching += 1;
@@ -92,6 +97,23 @@ mod tests {
             vec![same_a, same_b, other]
         );
         assert!(index.candidates(&f.m.tree, 99, b"file", &[]).is_empty());
+    }
+
+    #[test]
+    fn ranks_scan_root_basename_as_parent() {
+        use dfdu_engine::test_support::meta;
+
+        let (mut f, a) = Fixture::new();
+        let z =
+            f.m.tree
+                .new_root(b"/z/videos", &meta(Kind::Dir, 0, 100), true);
+        let other = f.file(a, "file", 10);
+        let matching = f.file(z, "file", 10);
+        let mut index = MatchIndex::default();
+        assert_eq!(
+            index.candidates(&f.m.tree, 10, b"file", &[b"videos"]),
+            vec![matching, other]
+        );
     }
 
     #[test]
