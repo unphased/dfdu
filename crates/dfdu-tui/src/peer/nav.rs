@@ -256,9 +256,16 @@ mod tests {
         session.front_mut().nav.footer = "✓ 1 first".into();
         if rescan {
             std::fs::write(&first, b"changed source bytes").unwrap();
-            scan();
+            let node = engine.read(|m| {
+                m.tree.node_ref(
+                    dfdu_tree::find_path(&m.tree, &dfdu_tree::HostPath::from(root.as_path()))
+                        .unwrap(),
+                )
+            });
+            engine.send(dfdu_engine::Command::Rescan { node });
+            assert!(engine.wait_idle(Some(Duration::from_secs(5))).is_idle());
             let _ = session
-                .tick(Instant::now() + Duration::from_secs(1))
+                .tick(Instant::now() + Duration::from_secs(2))
                 .unwrap();
         } else {
             session.front_mut().session.select(1);
@@ -455,7 +462,7 @@ pub(crate) fn draw(f: &mut ratatui::Frame, app: &crate::app::App, rect: ratatui:
 pub(crate) struct Runtime {
     pub workers: Workers,
     index: dfdu_session::match_index::MatchIndex,
-    last_path: Option<String>,
+    last_selection: Option<(String, bool, u64, i64)>,
     last_nav: Option<Nav>,
     version: u64,
     followed: Option<String>,
@@ -468,7 +475,7 @@ impl Runtime {
         Self {
             workers: Workers::new(),
             index: Default::default(),
-            last_path: None,
+            last_selection: None,
             last_nav: None,
             version: 0,
             followed: None,
@@ -494,12 +501,7 @@ impl Runtime {
                 let Some((path, dir)) = selected else {
                     return;
                 };
-                if self.last_path.as_ref() == Some(&path) {
-                    return;
-                }
-                self.last_path = Some(path.clone());
-                session.front_mut().nav.seq += 1;
-                let seq = session.front().nav.seq;
+                let seq = session.front().nav.seq + 1;
                 let nav = session.engine().read(|m| {
                     let ix =
                         dfdu_tree::find_path(&m.tree, &dfdu_tree::HostPath::from(path.as_str()))?;
@@ -524,6 +526,13 @@ impl Runtime {
                     })
                 });
                 if let Some(nav) = nav {
+                    let selection = (path.clone(), dir, nav.size, nav.mtime);
+                    if self.last_selection.as_ref() == Some(&selection) {
+                        return;
+                    }
+                    self.last_selection = Some(selection);
+                    session.front_mut().nav.seq = seq;
+                    session.front_mut().nav.footer = mark(Verdict::Pending).into();
                     let _ = peer.send_nav(nav);
                     self.generation += 1;
                     self.workers
@@ -569,7 +578,7 @@ impl Runtime {
         }
     }
     pub fn reset(&mut self, app: &mut crate::app::App) {
-        self.last_path = None;
+        self.last_selection = None;
         self.last_nav = None;
         self.followed = None;
         self.following = false;
