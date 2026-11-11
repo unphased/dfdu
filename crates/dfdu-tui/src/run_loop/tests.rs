@@ -194,6 +194,104 @@ fn run_actions(actions: Vec<Event>) {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn peer_status_events_redraw_idle_loop_without_keyboard_input() {
+    struct PairingWriter {
+        bytes: Vec<u8>,
+        stage: Arc<Mutex<u8>>,
+        master: Arc<dfdu_peer::Peer>,
+        target: String,
+        input: Sender<Event>,
+    }
+
+    impl Write for PairingWriter {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.bytes.extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            let text = String::from_utf8_lossy(&self.bytes);
+            let mut stage = self.stage.lock().unwrap();
+            match *stage {
+                0 if text.contains("unbound") => {
+                    self.master
+                        .bind(&self.target, dfdu_peer::DEFAULT_REMOTE_BIN)?;
+                    *stage = 1;
+                }
+                1 if text.contains("slave") => {
+                    self.master.unbind();
+                    *stage = 2;
+                }
+                2 if text.contains("unbound") => {
+                    self.input.send(quit()).unwrap();
+                    *stage = 3;
+                }
+                _ => {}
+            }
+            self.bytes.clear();
+            Ok(())
+        }
+    }
+
+    let master = Arc::new(dfdu_peer::Peer::start(Vec::new()).unwrap());
+    let slave = Arc::new(dfdu_peer::Peer::start(Vec::new()).unwrap());
+    let mut ui = UiOptions::from_env();
+    ui.peer = Some(crate::PeerOptions {
+        peer: slave.clone(),
+        remote_bin: dfdu_peer::DEFAULT_REMOTE_BIN.into(),
+    });
+    let engine = Engine::start(PortableBackend::default(), EngineOptions::default());
+    let mut session = Session::over(
+        &engine,
+        App::with_options(&ui, Instant::now()),
+        SessionOptions::default(),
+    );
+    let (input_tx, input) = unbounded();
+    let stage = Arc::new(Mutex::new(0));
+    let backend = CrosstermBackend::new(PairingWriter {
+        bytes: Vec::new(),
+        stage: stage.clone(),
+        master,
+        target: slave.id().to_owned(),
+        input: input_tx.clone(),
+    });
+    let mut terminal = Terminal::with_options(
+        backend,
+        TerminalOptions {
+            viewport: Viewport::Fixed(Rect::new(0, 0, 100, 24)),
+        },
+    )
+    .unwrap();
+    let mut previews = Preview::new(io::sink(), false).unwrap();
+    let (done, finished) = bounded(1);
+    std::thread::scope(|scope| {
+        scope.spawn(|| {
+            if finished.recv_timeout(Duration::from_secs(5)).is_err() {
+                let _ = input_tx.send(quit());
+            }
+        });
+        let result = run(
+            &mut terminal,
+            &mut session,
+            &input,
+            false,
+            &mut |_, _, _| Ok(Ok(())),
+            &mut previews,
+        );
+        let _ = done.send(());
+        assert!(result.unwrap().is_none());
+    });
+    session.shutdown(Duration::ZERO);
+    engine.shutdown(Duration::from_millis(200));
+    assert_eq!(
+        *stage.lock().unwrap(),
+        3,
+        "peer events must draw slave and then unbound before any input"
+    );
+}
+
 fn is_delete(event: Option<&Written>) -> bool {
     matches!(event, Some(Written::Graphics(bytes))
         if bytes.windows(10).any(|w| w == b"_Ga=d,d=I,"))
