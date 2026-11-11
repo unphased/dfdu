@@ -12,6 +12,7 @@ homepage.workspace = true
 workspace = true
 
 [dependencies]
+jpg-preview = { path = "../../../.vim/jpg-preview" }
 dfdu-tree.workspace = true
 dfdu-scan.workspace = true
 dfdu-rules.workspace = true

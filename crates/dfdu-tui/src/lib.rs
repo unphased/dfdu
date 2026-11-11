@@ -27,7 +27,7 @@ mod format;
 mod input;
 mod model;
 mod overlay;
-mod preview;
+pub mod preview;
 mod reopen;
 mod run_loop;
 mod setup;
