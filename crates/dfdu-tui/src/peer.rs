@@ -1,4 +1,5 @@
 //! Peer pairing controls. Transport work belongs to dfdu-peer's workers.
+pub(crate) mod nav;
 
 use crate::app::App;
 use crate::input::{
