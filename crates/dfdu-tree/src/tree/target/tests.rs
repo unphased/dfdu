@@ -2,6 +2,30 @@ use super::super::test_util::{add_dir, add_file, dir_meta};
 use super::*;
 
 #[test]
+fn overlapping_roots_prefer_the_most_specific_and_fall_back() {
+    let mut tree = Tree::new();
+    let outer = tree.new_root(b"/r", &dir_meta(), true);
+    let nested_path = tree.host_path(outer).join(b"nested");
+    let outer_nested = add_dir(&mut tree, outer, "nested");
+    let outer_shared = add_file(&mut tree, outer_nested, "shared", 1);
+    let outer_only = add_file(&mut tree, outer_nested, "outer-only", 2);
+    let nested = tree.new_root(nested_path.as_bytes(), &dir_meta(), true);
+    let inner_shared = add_file(&mut tree, nested, "shared", 3);
+
+    assert_eq!(find_path(&tree, &nested_path), Some(nested));
+    assert_eq!(
+        find_path(&tree, &tree.host_path(inner_shared)),
+        Some(inner_shared)
+    );
+    assert_ne!(outer_shared, inner_shared);
+    assert_eq!(
+        find_path(&tree, &tree.host_path(outer_only)),
+        Some(outer_only)
+    );
+    assert_eq!(find_path(&tree, &nested_path.join(b"missing")), None);
+}
+
+#[test]
 fn a_target_is_found_again_by_path_only_with_its_identity() {
     let mut tree = Tree::new();
     let root = tree.new_root(b"/r", &dir_meta(), true);
