@@ -25,14 +25,22 @@ pub fn clip(requested: Rect, screen: Rect) -> Option<Rect> {
     })
 }
 
-/// Recognizes a kitty terminal, excluding multiplexers without verified passthrough.
+/// Recognizes kitty graphics terminals, with an explicit user override.
 pub fn supported_terminal(
     term: Option<&str>,
+    term_program: Option<&str>,
     kitty_window_id: Option<&str>,
-    multiplexed: bool,
+    override_value: Option<&str>,
 ) -> bool {
-    !multiplexed
-        && (term == Some("xterm-kitty") || kitty_window_id.is_some_and(|id| !id.is_empty()))
+    match override_value {
+        Some("0") => false,
+        Some("1") => true,
+        _ => {
+            term.is_some_and(|term| term.contains("kitty") || term.contains("ghostty"))
+                || term_program == Some("ghostty")
+                || kitty_window_id.is_some()
+        }
+    }
 }
 
 /// Checks the filename extension, not the contents.
@@ -84,8 +92,6 @@ impl PreviewState {
             } else {
                 Action::None
             }
-        } else if self.current.is_some() {
-            Action::Render
         } else {
             Action::None
         }
@@ -121,12 +127,26 @@ mod tests {
     }
 
     #[test]
-    fn capability_is_explicit_and_conservative() {
-        assert!(supported_terminal(Some("xterm-kitty"), None, false));
-        assert!(supported_terminal(Some("xterm-256color"), Some("1"), false));
-        assert!(!supported_terminal(Some("xterm-256color"), None, false));
-        assert!(!supported_terminal(Some("xterm-kitty"), None, true));
-        assert!(!supported_terminal(None, Some(""), false));
+    fn capability_recognizes_terminals_and_honors_overrides() {
+        for (term, program, kitty) in [
+            (Some("xterm-kitty"), None, None),
+            (Some("kitty-custom"), None, None),
+            (Some("xterm-ghostty"), None, None),
+            (Some("tmux-256color"), Some("ghostty"), None),
+            (Some("screen"), None, Some("1")),
+            (None, None, Some("")),
+        ] {
+            assert!(supported_terminal(term, program, kitty, None));
+            assert!(!supported_terminal(term, program, kitty, Some("0")));
+        }
+        assert!(!supported_terminal(
+            Some("xterm-256color"),
+            None,
+            None,
+            None
+        ));
+        assert!(supported_terminal(None, None, None, Some("1")));
+        assert!(!supported_terminal(None, None, None, Some("other")));
     }
 
     #[test]
@@ -147,7 +167,14 @@ mod tests {
         assert_eq!(state.select(Some(first.clone())), Action::Render);
         let token = state.generation();
         assert!(state.is_current(token, &first));
-        assert_eq!(state.select(Some(first.clone())), Action::Render);
+        assert_eq!(state.select(Some(first.clone())), Action::None);
+        assert_eq!(state.generation(), token);
+        let resized = Request::new(first.path.clone(), Rect::new(2, 3, 20, 6));
+        assert_eq!(state.select(Some(resized.clone())), Action::Render);
+        let resized_token = state.generation();
+        assert!(!state.is_current(token, &first));
+        assert_eq!(state.select(Some(resized)), Action::None);
+        assert_eq!(state.generation(), resized_token);
         assert_eq!(state.select(Some(second.clone())), Action::Render);
         assert!(!state.is_current(token, &first));
         let token = state.generation();

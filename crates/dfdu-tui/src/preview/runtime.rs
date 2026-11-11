@@ -16,8 +16,9 @@ pub(crate) fn enabled() -> bool {
     io::stdout().is_terminal()
         && supported_terminal(
             std::env::var("TERM").ok().as_deref(),
-            std::env::var("KITTY_WINDOW_ID").ok().as_deref(),
-            std::env::var_os("TMUX").is_some() || std::env::var_os("STY").is_some(),
+            std::env::var("TERM_PROGRAM").ok().as_deref(),
+            std::env::var_os("KITTY_WINDOW_ID").as_ref().map(|_| ""),
+            std::env::var("DFDU_IMAGE_PREVIEW").ok().as_deref(),
         )
 }
 
@@ -78,7 +79,7 @@ pub(crate) struct Decoded {
     stream: Option<Vec<u8>>,
 }
 
-/// One in-flight decode, no queued obsolete work, and one cached stream. Dropping never
+/// One in-flight decode, no queued obsolete work, and one stream awaiting a draw. Dropping never
 /// waits for a decoder: it cannot write to the terminal, even after the browser has left.
 pub(crate) struct Preview<W: Write> {
     out: W,
@@ -172,10 +173,10 @@ impl<W: Write> Preview<W> {
             self.attempted = false;
             self.delete_visible()?;
         }
-        if let Some(stream) = &self.cached {
+        if let Some(stream) = self.cached.take() {
             // A partial write still needs cleanup if writing fails.
             self.visible = true;
-            self.out.write_all(stream)?;
+            self.out.write_all(&stream)?;
             self.out.flush()?;
         } else if !self.busy
             && !self.attempted

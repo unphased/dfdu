@@ -62,7 +62,10 @@ fn decode_is_async_cached_and_written_only_after_a_frame() {
     preview.after_draw(Some(request.clone())).unwrap();
     assert_eq!(out.take(), b"graphics");
     preview.after_draw(Some(request)).unwrap();
-    assert_eq!(out.take(), b"graphics", "redraw reuses the decoded stream");
+    assert!(
+        out.take().is_empty(),
+        "unchanged frames must not retransmit graphics"
+    );
     assert!(starts.try_recv().is_err(), "redraw must not decode again");
     preview.after_draw(None).unwrap();
     assert_eq!(out.take(), jpg_preview::delete_image(IMAGE_ID));
