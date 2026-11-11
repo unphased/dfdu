@@ -29,6 +29,8 @@ mod model;
 mod overlay;
 mod reopen;
 mod run_loop;
+#[cfg(test)]
+mod on_select_tests;
 mod setup;
 mod state;
 mod theme;
