@@ -105,6 +105,20 @@ fn cleanup_hook_and_panic_unlink_registrations() {
     fs::remove_dir_all(dir).unwrap();
 }
 #[test]
+fn pending_output_is_bounded_for_nonreading_peers() {
+    let (a, _b) = UnixStream::pair().unwrap();
+    let mut link = Link::new(a, None, Role::Master, "local", "host").unwrap();
+    link.ready = true;
+    link.output.resize(LIMIT + 1, b'x');
+    assert!(
+        link.poll()
+            .unwrap_err()
+            .to_string()
+            .contains("pending output")
+    );
+}
+
+#[test]
 fn timeout_applies_to_handshake_and_bound_connections() {
     for ready in [false, true] {
         let (a, _b) = UnixStream::pair().unwrap();

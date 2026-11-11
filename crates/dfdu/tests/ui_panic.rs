@@ -61,6 +61,16 @@ impl Browser {
     }
 
     fn start_options(tree: &Path, state: &Path, panic_on_key: bool, peer: bool) -> Browser {
+        Self::start_config(tree, state, panic_on_key, peer, &[])
+    }
+
+    fn start_config(
+        tree: &Path,
+        state: &Path,
+        panic_on_key: bool,
+        peer: bool,
+        extra: &[&str],
+    ) -> Browser {
         let master = openpt(OpenptFlags::RDWR | OpenptFlags::NOCTTY).unwrap();
         grantpt(&master).unwrap();
         unlockpt(&master).unwrap();
@@ -95,7 +105,10 @@ impl Browser {
             cmd.env("DFDU_TEST_UI_PANIC", "1");
         }
         if peer {
-            cmd.arg("--peer").env("HOME", state);
+            cmd.arg("--peer")
+                .args(extra)
+                .env("HOME", state)
+                .env("DFDU_SSH", state.join("fake-ssh"));
         }
         let child = cmd.spawn().unwrap();
 
@@ -236,6 +249,150 @@ fn ui_panic_restores_terminal_and_writes_crash_file() {
     ] {
         assert!(report.contains(want), "{want:?} missing from:\n{report}");
     }
+}
+
+/// Exercise both browser processes, the CLI, attach, and the same SSH stdio path used remotely.
+#[test]
+fn two_peer_browsers_bind_locally_and_through_fake_ssh() {
+    use std::os::unix::fs::PermissionsExt;
+    for remote in [false, true] {
+        let tmp = tempfile::Builder::new()
+            .prefix("dp-")
+            .tempdir_in("/tmp")
+            .unwrap();
+        let source = tree(&tmp.path().join("source"));
+        let backup = tree(&tmp.path().join("backup"));
+        let state = tmp.path().join("state");
+        fs::create_dir_all(&state).unwrap();
+        let script = state.join("fake-ssh");
+        fs::write(&script, "#!/bin/sh\n[ \"$1 $2 $3 $4\" = '-T -o BatchMode=yes testhost' ] || exit 91\nshift 4\nexec /bin/sh -c \"$1\"\n").unwrap();
+        fs::set_permissions(&script, fs::Permissions::from_mode(0o700)).unwrap();
+        let mut slave = Browser::start_options(&backup, &state, false, true);
+        let instances = || -> Vec<serde_json::Value> {
+            let output = Command::new(env!("CARGO_BIN_EXE_dfdu"))
+                .args(["peers", "--json"])
+                .env("HOME", &state)
+                .output()
+                .unwrap();
+            assert!(output.status.success());
+            serde_json::from_slice(&output.stdout).unwrap()
+        };
+        let id = instances()[0]["id"].as_str().unwrap().to_owned();
+        let target = if remote {
+            format!("testhost:{id}")
+        } else {
+            id.clone()
+        };
+        let mut master = Browser::start_config(
+            &source,
+            &state,
+            false,
+            true,
+            &[
+                "--bind",
+                &target,
+                "--peer-remote-bin",
+                env!("CARGO_BIN_EXE_dfdu"),
+            ],
+        );
+        wait_until("both browser roles", Duration::from_secs(5), || {
+            let peers = instances();
+            peers.len() == 2
+                && peers.iter().any(|p| p["role"] == "master")
+                && peers.iter().any(|p| p["role"] == "slave" && p["id"] == id)
+        });
+        wait_until("role indicators", Duration::from_secs(5), || {
+            String::from_utf8_lossy(&master.output()).contains("master")
+                && String::from_utf8_lossy(&slave.output()).contains("slave")
+        });
+        // Unbind from the slave so bye must cross the attach/SSH path back to master.
+        slave.press(b"B");
+        wait_until("both browsers unbound", Duration::from_secs(5), || {
+            let peers = instances();
+            peers.len() == 2 && peers.iter().all(|p| p["role"] == "unbound")
+        });
+        if remote {
+            master.press(b"B");
+            master.press(target.as_bytes());
+            master.press(b"\r");
+            wait_until("SSH rebind", Duration::from_secs(5), || {
+                instances().iter().any(|p| p["role"] == "master")
+            });
+            rustix::process::kill_process(
+                rustix::process::Pid::from_raw(master.child.id() as i32).unwrap(),
+                rustix::process::Signal::TERM,
+            )
+            .unwrap();
+            wait_until(
+                "connected master termination",
+                Duration::from_secs(5),
+                || master.child.try_wait().unwrap().is_some(),
+            );
+            wait_until(
+                "slave notices terminated SSH master",
+                Duration::from_secs(5),
+                || {
+                    let peers = instances();
+                    peers.len() == 1 && peers[0]["role"] == "unbound"
+                },
+            );
+        } else {
+            master.press(b"q");
+            assert!(master.wait().success());
+        }
+        slave.press(b"q");
+        assert!(slave.wait().success());
+        assert!(instances().is_empty());
+    }
+}
+
+#[test]
+fn termination_reaps_stalled_ssh_and_its_descendant_before_exit() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::Builder::new()
+        .prefix("dp-")
+        .tempdir_in("/tmp")
+        .unwrap();
+    let tree = tree(tmp.path());
+    let state = tmp.path().join("state");
+    fs::create_dir_all(&state).unwrap();
+    let script = state.join("fake-ssh");
+    fs::write(
+        &script,
+        "#!/bin/sh\nsleep 60 &\necho \"$$ $!\" > \"$HOME/ssh-pids\"\nwait\n",
+    )
+    .unwrap();
+    fs::set_permissions(&script, fs::Permissions::from_mode(0o700)).unwrap();
+    let mut browser =
+        Browser::start_config(&tree, &state, false, true, &["--bind", "testhost:abcdef12"]);
+    wait_until("stalled ssh child", Duration::from_secs(5), || {
+        state.join("ssh-pids").exists()
+    });
+    let pids: Vec<_> = fs::read_to_string(state.join("ssh-pids"))
+        .unwrap()
+        .split_whitespace()
+        .map(|s| rustix::process::Pid::from_raw(s.parse().unwrap()).unwrap())
+        .collect();
+    rustix::process::kill_process(
+        rustix::process::Pid::from_raw(browser.child.id() as i32).unwrap(),
+        rustix::process::Signal::TERM,
+    )
+    .unwrap();
+    wait_until("signal termination", Duration::from_secs(5), || {
+        browser.child.try_wait().unwrap().is_some()
+    });
+    wait_until("SSH process group to exit", Duration::from_secs(5), || {
+        pids.iter()
+            .all(|pid| rustix::process::test_kill_process(*pid) == Err(rustix::io::Errno::SRCH))
+    });
+    let peers = state.join(".local/state/dfdu/peers");
+    assert_eq!(fs::read_dir(&peers).unwrap().count(), 0);
+    std::thread::sleep(Duration::from_millis(100));
+    assert_eq!(
+        fs::read_dir(&peers).unwrap().count(),
+        0,
+        "metadata reappeared"
+    );
 }
 
 #[test]

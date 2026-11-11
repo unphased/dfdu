@@ -79,7 +79,7 @@ struct Hello {
 enum Control {
     Bind(String, String),
     Unbind,
-    Stop,
+    Stop(Option<Sender<()>>),
 }
 
 pub struct Peer {
@@ -310,8 +310,12 @@ impl Peer {
         let dir = self.dir.clone();
         let id = self.instance.id.clone();
         move || {
-            let _ = control.send(Control::Stop);
-            // Signal workers may terminate the process before the transport thread runs.
+            let (done, stopped) = crossbeam_channel::bounded(1);
+            if control.send(Control::Stop(Some(done))).is_ok() {
+                // Connects and bridge pumps are bounded. Wait until child processes and
+                // the registration guard are gone before a signal worker terminates us.
+                let _ = stopped.recv();
+            }
             if let Ok(path) = socket(&dir, &id) {
                 let _ = fs::remove_file(path);
             }
@@ -322,7 +326,7 @@ impl Peer {
 use std::os::unix::fs::MetadataExt;
 impl Drop for Peer {
     fn drop(&mut self) {
-        let _ = self.control.send(Control::Stop);
+        let _ = self.control.send(Control::Stop(None));
         if let Some(worker) = self.worker.take() {
             let _ = worker.join();
         }
@@ -510,6 +514,9 @@ impl Link {
         Ok(())
     }
     fn poll(&mut self) -> io::Result<Option<String>> {
+        if self.output.len() > LIMIT {
+            return Err(error("peer is not reading: pending output exceeds 64 KiB"));
+        }
         self.flush()?;
         let mut peer = None;
         let mut bytes = [0; 4096];
@@ -601,7 +608,7 @@ fn run(
     mut instance: Instance,
     dir: PathBuf,
 ) {
-    let _registration = Registration {
+    let registration = Registration {
         dir: dir.clone(),
         id: instance.id.clone(),
     };
@@ -609,10 +616,15 @@ fn run(
     loop {
         while let Ok(control) = rx.try_recv() {
             match control {
-                Control::Stop => {
+                Control::Stop(done) => {
                     if let Some(link) = &mut link {
                         link.queue(Frame::Bye { reason: None });
                         let _ = link.flush();
+                    }
+                    drop(link);
+                    drop(registration);
+                    if let Some(done) = done {
+                        let _ = done.send(());
                     }
                     return;
                 }
