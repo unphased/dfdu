@@ -2,16 +2,16 @@
 #![cfg(unix)]
 mod discovery;
 #[cfg(test)]
-mod tests;
-#[cfg(test)]
 mod sample_tests;
+#[cfg(test)]
+mod tests;
 pub use discovery::{Beacon, DISCOVERY_PORT, discover, discover_for, remote_peers};
 
 use crossbeam_channel::{Receiver, Sender, unbounded};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{self, DirBuilder, OpenOptions},
-    io::{self, Read, Write},
+    io::{self, Read, Seek, SeekFrom, Write},
     net::Shutdown,
     os::fd::AsFd,
     os::unix::{
@@ -80,21 +80,44 @@ pub enum NavKind {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NavHash {
     pub seq: u64,
-    /// Hexadecimal sampled BLAKE3 digest; interpretation belongs to the matcher.
+    /// Lowercase hexadecimal sampled XXH3-128 digest from [`sample_hash`].
     pub hash: String,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Verdict {
+    HashMatch,
+    HashMismatch,
     Pending,
-    Match,
-    Mismatch,
-    Missing,
+    NameOnly,
+    None,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NavStatus {
     pub seq: u64,
+    pub best: Option<String>,
+    pub candidates: usize,
     pub verdict: Verdict,
+}
+
+/// Hash the whole file up to 100 KiB, otherwise its first and last 50 KiB.
+/// The sampled bytes are followed by the file length as a little-endian u64.
+/// Returns a zero-padded, lowercase hexadecimal XXH3-128 digest.
+pub fn sample_hash(path: &Path) -> io::Result<String> {
+    const EDGE: usize = 50 * 1024;
+    let mut file = fs::File::open(path)?;
+    let len = file.metadata()?.len();
+    let sample_len = len.min(2 * EDGE as u64) as usize;
+    let mut bytes = vec![0; sample_len];
+    if len <= 2 * EDGE as u64 {
+        file.read_exact(&mut bytes)?;
+    } else {
+        file.read_exact(&mut bytes[..EDGE])?;
+        file.seek(SeekFrom::Start(len - EDGE as u64))?;
+        file.read_exact(&mut bytes[EDGE..])?;
+    }
+    bytes.extend_from_slice(&len.to_le_bytes());
+    Ok(format!("{:032x}", twox_hash::XxHash3_128::oneshot(&bytes)))
 }
 #[derive(Default)]
 struct Pending {

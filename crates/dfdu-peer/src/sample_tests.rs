@@ -26,6 +26,12 @@ fn sample_hash_samples_edges_and_length() {
         assert_eq!(hash.len(), 32);
         assert!(hash.bytes().all(|b| b.is_ascii_hexdigit()));
         assert_eq!(sample_hash(&path).unwrap(), hash);
+        let mut input = bytes.to_vec();
+        input.extend_from_slice(&(bytes.len() as u64).to_le_bytes());
+        assert_eq!(
+            hash,
+            format!("{:032x}", twox_hash::XxHash3_128::oneshot(&input))
+        );
     }
     fs::write(&path, b"hello").unwrap();
     let short = sample_hash(&path).unwrap();
