@@ -359,7 +359,7 @@ fn termination_reaps_stalled_ssh_and_its_descendant_before_exit() {
     let script = state.join("fake-ssh");
     fs::write(
         &script,
-        "#!/bin/sh\nsleep 60 &\necho \"$$ $!\" > \"$HOME/ssh-pids\"\nwait\n",
+        "#!/bin/sh\nsleep 60 &\necho \"$$ $!\" > \"$HOME/ssh-pids.tmp\"\nmv \"$HOME/ssh-pids.tmp\" \"$HOME/ssh-pids\"\nwait\n",
     )
     .unwrap();
     fs::set_permissions(&script, fs::Permissions::from_mode(0o700)).unwrap();
@@ -373,6 +373,7 @@ fn termination_reaps_stalled_ssh_and_its_descendant_before_exit() {
         .split_whitespace()
         .map(|s| rustix::process::Pid::from_raw(s.parse().unwrap()).unwrap())
         .collect();
+    assert_eq!(pids.len(), 2, "expected SSH and descendant PIDs");
     rustix::process::kill_process(
         rustix::process::Pid::from_raw(browser.child.id() as i32).unwrap(),
         rustix::process::Signal::TERM,

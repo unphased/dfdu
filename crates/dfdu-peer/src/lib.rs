@@ -311,9 +311,9 @@ impl Peer {
         let id = self.instance.id.clone();
         move || {
             let (done, stopped) = crossbeam_channel::bounded(1);
-            if control.send(Control::Stop(Some(done))).is_ok() {
-                // Connects and bridge pumps are bounded. Wait until child processes and
-                // the registration guard are gone before a signal worker terminates us.
+            if control.send(Control::Stop(Some(done))).is_ok() && !thread::panicking() {
+                // Signal workers wait for transport teardown. A panic hook cannot wait:
+                // it may run on the worker itself or a bridge the worker must join.
                 let _ = stopped.recv();
             }
             if let Ok(path) = socket(&dir, &id) {
