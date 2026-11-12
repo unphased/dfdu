@@ -173,4 +173,9 @@ Each phase starts with failing tests in their own commit, then green commits at 
    authentication and host-key checks. External discovery commands have five-second limits.
 4. **Nav and matching.** Nav events, the candidate list view, parallel sampled hashes,
    re-match after a scan.
-5. **Swap.**
+5. **Swap (complete).** Master-only `W` sends `swap`; the receiver replies `swap_ok`
+   and becomes master, and the sender becomes slave on the ack. Both clear stale nav,
+   candidates and verdict; the new master sends its current selection immediately.
+   Duplicate and wrong-role requests are ignored. Link and two-loop tests cover the
+   handshake and reversed navigation. Live Mac `/tmp` ↔ NAS `/tank-mini` check passed:
+   Mac master → NAS slave, then Mac slave ← NAS master. Help and footer show `W`.
