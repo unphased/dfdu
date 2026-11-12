@@ -39,6 +39,26 @@ fn peers_json_is_an_empty_array_in_a_fresh_home() {
 }
 
 #[test]
+fn peer_flags_are_harmless_without_a_terminal() {
+    let tree = tempfile::tempdir().unwrap();
+    for flags in [vec![], vec!["--peer"], vec!["--no-peer"]] {
+        let output = Command::new(env!("CARGO_BIN_EXE_dfdu"))
+            .args(&flags)
+            .arg(tree.path())
+            .env("DFDU_STATE_DIR", tree.path().join("state"))
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{flags:?}: {:?}", output.stderr);
+        assert!(!tree.path().join("state/peers").exists());
+    }
+    let output = Command::new(env!("CARGO_BIN_EXE_dfdu"))
+        .args(["scan", "--help"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+}
+
+#[test]
 fn bind_implies_peer_mode_and_requires_a_terminal() {
     let output = Command::new(env!("CARGO_BIN_EXE_dfdu"))
         .args(["--bind", "abcdef", "/tmp"])
@@ -47,6 +67,6 @@ fn bind_implies_peer_mode_and_requires_a_terminal() {
     assert_eq!(output.status.code(), Some(2));
     assert!(
         String::from_utf8_lossy(&output.stderr)
-            .contains("--peer requires the interactive browser on a terminal")
+            .contains("--bind requires the interactive browser on a terminal")
     );
 }

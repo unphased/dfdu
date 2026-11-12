@@ -533,7 +533,9 @@ mod tests {
 
     #[test]
     fn bind_implies_peer_mode() {
-        assert!(!Cli::try_parse_from(["dfdu", "/x"]).unwrap().peer);
+        assert!(Cli::try_parse_from(["dfdu", "/x"]).unwrap().peer);
+        assert!(Cli::try_parse_from(["dfdu", "--no-peer", "/x"]).is_ok());
+        assert!(Cli::try_parse_from(["dfdu", "--peer-remote-bin", "/bin/dfdu"]).is_ok());
         for args in [
             vec!["dfdu", "--bind", "abc123", "/x"],
             vec!["dfdu", "--peer", "--bind", "abc123", "/x"],
@@ -555,7 +557,8 @@ mod tests {
             vec!["dfdu", "--bind", "abc123", "--file", "scan"],
             vec!["dfdu", "--bind", "abc123", "--resume-from", "scan"],
             vec!["dfdu", "--bind", "abc123", "--disks"],
-            vec!["dfdu", "--peer-remote-bin", "/bin/dfdu"],
+            vec!["dfdu", "--no-peer", "--bind", "abc123"],
+            vec!["dfdu", "--peer", "--no-peer"],
         ] {
             assert!(Cli::try_parse_from(&args).is_err(), "{args:?}");
         }
