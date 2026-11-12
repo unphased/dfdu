@@ -65,6 +65,78 @@ mod tests {
             .map(|e| String::from_utf8_lossy(&e.name).into_owned())
     }
 
+    fn filtered_browser(query: &str) -> (App, Instant) {
+        use dfdu_session::{filter, line::TextOp};
+        let t0 = Instant::now();
+        let mut app = App::new(Theme::no_color(), t0);
+        app.refresh(
+            snap_with_totals(vec![
+                test_entry(0, "PYthon", 40),
+                test_entry(1, "partly", 30),
+                test_entry(2, "copy", 20),
+                test_entry(3, "hidden", 10),
+            ], 1), t0,
+        );
+        filter::open(&mut app.session);
+        for c in query.chars() {
+            filter::edit(&mut app.session, TextOp::Insert(c));
+        }
+        app.reorder(t0);
+        filter::edit(&mut app.session, TextOp::Submit);
+        (app, t0)
+    }
+
+    fn hit(app: &mut App, t0: Instant, c: char) {
+        app.key(crate::tests::press(ratatui::crossterm::event::KeyCode::Char(c)), t0);
+    }
+
+    #[test]
+    fn exact_jumps_skip_fuzzy_hits_and_wrap_in_both_directions() {
+        let (mut app, t0) = filtered_browser("py");
+        assert_eq!(app.session.list.rows.len(), 3);
+        app.session.move_to(0);
+        for (key, name, status) in [
+            ('n', "copy", "exact 2/2"),
+            ('n', "PYthon", "exact 1/2"),
+            ('N', "copy", "exact 2/2"),
+            ('N', "PYthon", "exact 1/2"),
+        ] {
+            hit(&mut app, t0, key);
+            assert_eq!(selected(&app).as_deref(), Some(name));
+            assert_eq!(app.session.status.as_deref(), Some(status));
+        }
+        app.session.move_to(1);
+        hit(&mut app, t0, 'N');
+        assert_eq!(selected(&app).as_deref(), Some("PYthon"));
+    }
+
+    #[test]
+    fn exact_jumps_with_no_hits_or_no_filter() {
+        let (mut app, t0) = filtered_browser("pl");
+        let before = selected(&app);
+        for key in ['n', 'N'] {
+            hit(&mut app, t0, key);
+            assert_eq!(selected(&app), before);
+            assert_eq!(app.session.status.as_deref(), Some("no exact match for \"pl\""));
+        }
+        let (mut app, t0) = filtered_browser("");
+        for key in ['n', 'N'] {
+            hit(&mut app, t0, key);
+            assert_eq!(selected(&app).as_deref(), Some("PYthon"));
+            assert!(app.session.status.is_none());
+        }
+    }
+
+    #[test]
+    fn a_sorts_by_name_while_n_jumps() {
+        let (mut app, t0) = filtered_browser("py");
+        hit(&mut app, t0, 'A');
+        assert_eq!(app.session.sort.key, crate::state::order::SortKey::Name);
+        hit(&mut app, t0, 'n');
+        assert_eq!(app.session.sort.key, crate::state::order::SortKey::Name);
+        assert!(app.session.status.as_deref().unwrap_or("").starts_with("exact "));
+    }
+
     #[test]
     fn moves_stay_within_the_rows() {
         let (mut app, _) = browser();
