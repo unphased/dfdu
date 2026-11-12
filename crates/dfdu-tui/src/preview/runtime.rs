@@ -5,7 +5,7 @@ use std::io::{self, IsTerminal, Write};
 use crossbeam_channel::{Receiver, Sender, bounded, never};
 use ratatui::layout::Rect;
 
-use super::{PreviewState, Request, clip, is_image, supported_terminal};
+use super::{PreviewState, Request, clip, fit, is_image, supported_terminal};
 use crate::app::App;
 use crate::app::views::{self, View};
 
@@ -49,8 +49,28 @@ pub(crate) fn request(app: &App, screen: Rect) -> Option<Request> {
     if is_dir || !is_image(&path) {
         return None;
     }
-    let area = clip(Rect::new(x, y, 30, 12), screen)?;
-    Some(Request::new(path, area))
+    let bounds = clip(app.areas.preview_bounds, screen)?;
+    if x < bounds.x || x >= bounds.right() || y < bounds.y || y >= bounds.bottom() {
+        return None;
+    }
+    let area = Rect::new(x, bounds.y, bounds.right() - x, bounds.height);
+    if area.width < 2 || area.height < 2 {
+        return None;
+    }
+    let cell_pixels = ratatui::crossterm::terminal::window_size()
+        .ok()
+        .and_then(|size| {
+            let width = size.width.checked_div(size.columns)?;
+            let height = size.height.checked_div(size.rows)?;
+            (width > 0 && height > 0).then_some((width, height))
+        })
+        .unwrap_or((10, 20));
+    Some(Request {
+        path,
+        area,
+        row: y,
+        cell_pixels,
+    })
 }
 
 struct Job {
@@ -80,7 +100,8 @@ impl<W: Write> Preview<W> {
     pub(crate) fn new(out: W, enabled: bool) -> io::Result<Self> {
         if enabled {
             Self::with_decoder(out, |request| {
-                let area = request.area;
+                let dimensions = jpg_preview::dimensions(&request.path).ok()?;
+                let area = fit(request.area, request.row, dimensions, request.cell_pixels)?;
                 jpg_preview::render(
                     &request.path,
                     usize::from(area.width),

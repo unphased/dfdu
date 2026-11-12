@@ -25,6 +25,45 @@ pub fn clip(requested: Rect, screen: Rect) -> Option<Rect> {
     })
 }
 
+/// Fits on either side of the selected row, including that row on both sides.
+/// The cell envelope rounds up inside the region. Equal image scales prefer down.
+pub fn fit(bounds: Rect, row: u16, image: (u32, u32), cell: (u16, u16)) -> Option<Rect> {
+    if bounds.width < 2
+        || row < bounds.y
+        || row >= bounds.bottom()
+        || image.0 == 0
+        || image.1 == 0
+        || cell.0 == 0
+        || cell.1 == 0
+    {
+        return None;
+    }
+    let candidate = |height: u16, up: bool| {
+        if height < 2 {
+            return None;
+        }
+        let scale = (f64::from(bounds.width) * f64::from(cell.0) / f64::from(image.0))
+            .min(f64::from(height) * f64::from(cell.1) / f64::from(image.1));
+        let width = ((f64::from(image.0) * scale / f64::from(cell.0))
+            .ceil()
+            .max(1.0) as u16)
+            .min(bounds.width);
+        let height = ((f64::from(image.1) * scale / f64::from(cell.1))
+            .ceil()
+            .max(1.0) as u16)
+            .min(height);
+        let y = if up { row + 1 - height } else { row };
+        Some((scale, Rect::new(bounds.x, y, width, height)))
+    };
+    let down = candidate(bounds.bottom() - row, false);
+    let up = candidate(row - bounds.y + 1, true);
+    match (down, up) {
+        (Some(down), Some(up)) => Some(if up.0 > down.0 { up.1 } else { down.1 }),
+        (Some(value), None) | (None, Some(value)) => Some(value.1),
+        (None, None) => None,
+    }
+}
+
 /// Recognizes kitty graphics terminals, with an explicit user override.
 pub fn supported_terminal(
     term: Option<&str>,
@@ -54,11 +93,18 @@ pub fn is_image(path: &Path) -> bool {
 pub struct Request {
     path: PathBuf,
     area: Rect,
+    row: u16,
+    cell_pixels: (u16, u16),
 }
 
 impl Request {
     pub fn new(path: PathBuf, area: Rect) -> Self {
-        Self { path, area }
+        Self {
+            path,
+            area,
+            row: area.y,
+            cell_pixels: (10, 20),
+        }
     }
 }
 
@@ -121,16 +167,22 @@ mod tests {
         let fit = |row, image| super::fit(bounds, row, image, (10, 20));
         // Wide images fill the width on either side, so down wins the tie.
         assert_eq!(fit(12, (800, 200)), Some(Rect::new(40, 12, 40, 5)));
-        assert_eq!(fit(3, (200, 800)), Some(Rect::new(40, 3, 9, 19)));
+        assert_eq!(fit(3, (200, 800)), Some(Rect::new(40, 3, 10, 19)));
         let up = fit(20, (200, 800)).unwrap();
-        assert_eq!(up, Rect::new(40, 2, 9, 19));
+        assert_eq!(up, Rect::new(40, 2, 10, 19));
         assert_eq!(up.bottom() - 1, 20, "bottom-left touches selected row");
         let down = fit(3, (800, 800)).unwrap();
         assert_eq!(down, Rect::new(40, 3, 38, 19));
         assert_eq!(down.y, 3, "top-left touches selected row");
         assert_eq!(fit(12, (0, 800)), None);
-        assert_eq!(super::fit(Rect::new(40, 2, 1, 20), 3, (20, 20), (10, 20)), None);
-        assert_eq!(super::fit(Rect::new(40, 2, 40, 1), 2, (20, 20), (10, 20)), None);
+        assert_eq!(
+            super::fit(Rect::new(40, 2, 1, 20), 3, (20, 20), (10, 20)),
+            None
+        );
+        assert_eq!(
+            super::fit(Rect::new(40, 2, 40, 1), 2, (20, 20), (10, 20)),
+            None
+        );
     }
 
     #[test]

@@ -127,6 +127,7 @@ pub fn draw(f: &mut Frame, app: &mut App, head: Rect, area: Rect, now: Instant, 
         f.render_stateful_widget(bar, area, &mut state);
     }
     app.areas.preview_anchor = preview_anchor;
+    app.areas.preview_bounds = Rect::new(area.x, area.y, width, area.height);
 }
 
 /// What the list says when the scan root finished empty: so, and, unless the scan was read

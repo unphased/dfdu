@@ -98,7 +98,7 @@ The cleanup view (`3`) lists what the [cleanup rules](/docs/rules/) found, with 
 
 ## Image previews
 
-In kitty, highlighting a JPEG, PNG or ARW file in the Files view (`1`, including tree mode) shows a preview beside its row. No key or option is needed. The preview starts one cell after the selected row's displayed name and notes, at the same row. It uses 30 columns by 12 rows, clipped to the screen. It does not cover the selected name; if no space remains beside it, no preview is shown.
+In kitty, highlighting a JPEG, PNG or ARW file in the Files view (`1`, including tree mode) shows a preview beside its row. No key or option is needed. The preview starts one cell after the selected row's displayed name and notes, at the same row. It fits the image into the space to the right of the name, stopping before the scrollbar. It uses the space above or below the selected row, whichever gives a larger image, and prefers below on a tie. The image keeps its aspect ratio and its left corner touches the selected row. Headers and status rows stay clear. If the available region is less than two cells wide or high, no preview is shown.
 
 Previews read local files only, not `--remote` scans or imported snapshots. They are enabled when `TERM` contains `kitty` or `ghostty`, `TERM_PROGRAM` is `ghostty`, or `KITTY_WINDOW_ID` is set. Set `DFDU_IMAGE_PREVIEW=0` to disable them, or `DFDU_IMAGE_PREVIEW=1` to force them on, including inside multiplexers. Inherited terminal variables also count inside multiplexers, which must pass kitty graphics through for the image to display. Decoding runs in the background; moving before it finishes discards the old result. An unreadable or invalid image has no preview.
 

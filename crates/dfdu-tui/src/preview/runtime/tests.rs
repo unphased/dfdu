@@ -128,6 +128,55 @@ fn selection_and_geometry_changes_delete_before_replacement_and_drop_cleans_up()
 }
 
 #[test]
+fn real_worker_fits_up_and_encodes_the_fitted_placement() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("square.png");
+    std::fs::write(
+        &path,
+        [
+            137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1,
+            8, 4, 0, 0, 0, 181, 28, 12, 2, 0, 0, 0, 11, 73, 68, 65, 84, 120, 218, 99, 100, 248, 15,
+            0, 1, 5, 1, 1, 39, 24, 227, 102, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+        ],
+    )
+    .unwrap();
+    let out = Output::default();
+    let mut preview = Preview::new(out.clone(), true).unwrap();
+    let mut request = Request::new(path, Rect::new(40, 2, 40, 20));
+    request.row = 20;
+    preview.after_draw(Some(request.clone())).unwrap();
+    let decoded = preview.results().recv_timeout(WAIT).unwrap();
+    assert!(decoded.stream.is_some());
+    preview.complete(decoded);
+    preview.after_draw(Some(request)).unwrap();
+    let stream = String::from_utf8(out.take()).unwrap();
+    assert!(stream.starts_with("\x1b7\x1b[3;41H"));
+    assert!(stream.contains("c=38,r=19,"));
+}
+
+#[test]
+fn scrollbar_column_is_not_available_to_the_preview() {
+    let now = Instant::now();
+    let mut app = App::new(Theme::ansi16(), now);
+    app.session.outside.local = true;
+    app.refresh(
+        Snapshot {
+            dir_path: "/r".into(),
+            entries: (0..50)
+                .map(|i| test_entry(i, &format!("{i}.jpg"), 100))
+                .collect(),
+            ..Snapshot::default()
+        },
+        now,
+    );
+    let screen = render_buffer(&mut app, now, 100, 30).area;
+    let selected = request(&app, screen).unwrap();
+    assert_eq!(selected.area.right(), app.areas.list.right() - 1);
+    assert_eq!(selected.area.y, app.areas.list.y);
+    assert_eq!(selected.area.bottom(), app.areas.list.bottom());
+}
+
+#[test]
 fn disabled_preview_does_not_start_work_or_write_graphics() {
     let out = Output::default();
     let mut preview = Preview::new(out.clone(), false).unwrap();
@@ -170,16 +219,14 @@ fn only_local_nonimported_files_in_an_unobscured_files_view_get_a_request() {
     );
     assert_eq!(selected.area.x, app.mouse.name_x + 2 + 5 + 1);
     assert_eq!(selected.area.y, app.areas.list.y);
-    assert_eq!(selected.area.width, 30);
-    assert_eq!(selected.area.height, 12);
+    assert_eq!(selected.area.right(), app.areas.list.right());
+    assert_eq!(selected.area.bottom(), app.areas.list.bottom());
+    assert_eq!(selected.row, app.areas.list.y);
     let narrow = render_buffer(&mut app, now, 39, 10).area;
     let clipped = request(&app, narrow).expect("narrow screen still has room beside name");
     assert_eq!(clipped.area.x, app.mouse.name_x + 2 + 5 + 1);
-    assert_eq!(
-        clipped.area.width,
-        (narrow.right() - clipped.area.x).min(30)
-    );
-    assert_eq!(clipped.area.height, narrow.bottom() - clipped.area.y);
+    assert_eq!(clipped.area.width, app.areas.list.right() - clipped.area.x);
+    assert_eq!(clipped.area.bottom(), app.areas.list.bottom());
     render_buffer(&mut app, now, 100, 30);
     assert_eq!(clip(selected.area, screen), Some(selected.area));
     for (name, cells) in [("界.jpg", 6), ("a-very-long-selected-image-name.jpg", 35)] {
@@ -187,7 +234,7 @@ fn only_local_nonimported_files_in_an_unobscured_files_view_get_a_request() {
         let screen = render_buffer(&mut app, now, 120, 30).area;
         let area = request(&app, screen).unwrap().area;
         assert_eq!(area.x, app.mouse.name_x + 2 + cells + 1);
-        assert_eq!(area.width, (screen.right() - area.x).min(30));
+        assert_eq!(area.right(), app.areas.list.right());
     }
     app.session.snap.entries[0].name = b"a.jpg".as_slice().into();
     render_buffer(&mut app, now, 100, 30);

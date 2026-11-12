@@ -36,6 +36,8 @@ pub struct Areas {
     pub list: Rect,
     /// First cell after the selected row's rendered name and notes, with a one-cell gap.
     pub preview_anchor: Option<(u16, u16)>,
+    /// List body without the scrollbar column.
+    pub preview_bounds: Rect,
     pub details: Option<Rect>,
     pub candidates: Option<Rect>,
     /// The open overlay.
@@ -90,6 +92,7 @@ pub fn draw(f: &mut Frame, app: &mut App, now: Instant) {
         details: pane,
         candidates: (candidate_height > 0).then_some(candidates),
         preview_anchor: None,
+        preview_bounds: Rect::default(),
         overlay: None,
         debug: None,
     };
