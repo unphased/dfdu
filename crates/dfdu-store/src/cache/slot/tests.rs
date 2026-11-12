@@ -62,6 +62,28 @@ fn old_scans_expire() {
     assert!(!slot.cached(now));
 }
 
+#[test]
+fn loading_obeys_max_age_without_shortening_retention() {
+    let (_tmp, _cache, mut slot) = setup();
+    let now = now();
+    let (t, _) = tree_of(slot.key.root(), 3);
+    for max_age in [3600, 2 * 86_400] {
+        slot.cache.max_age = max_age;
+        for age in [max_age - 1, max_age, max_age + 1] {
+            save(&slot, &t, &header(now - age, now - age));
+            set_mtime(&slot.path, now - age);
+            assert_eq!(slot.cached(now), age <= max_age);
+            assert_eq!(slot.load(now).unwrap().is_some(), age <= max_age);
+            assert!(slot.path.exists(), "load limit must not remove retained scans");
+            assert_eq!(slot.sweep(now).files, 0);
+        }
+        // A recent mtime cannot make an old snapshot header eligible.
+        save(&slot, &t, &header(now - max_age - 1, now));
+        assert!(slot.cached(now));
+        assert!(slot.load(now).unwrap().is_none());
+    }
+}
+
 /// A damaged or cut-short file is an error and is removed; one of another directory is not
 /// used, nor is a symbolic link.
 #[test]
