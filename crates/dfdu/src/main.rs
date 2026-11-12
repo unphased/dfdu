@@ -138,8 +138,9 @@ struct Cli {
     no_history: bool,
     /// Scan PATH afresh: do not open its cached scan, nor save this one (`DFDU_CACHE=0` turns
     /// the cache off for good). Without it, the browser opens the last complete scan of PATH
-    /// at once, if one is cached, and brings it up to date in the background; scans that take
-    /// 3 s or more are cached for 14 days (`dfdu cache list`).
+    /// at once, if it is at most 1 hour old (`DFDU_CACHE_MAX_AGE`, e.g. 20m, 1h or 2d), and
+    /// brings it up to date in the background; scans that take 3 s or more are kept for
+    /// 14 days (`dfdu cache list`).
     #[arg(long)]
     no_cache: bool,
     /// Colour theme: auto, dark, light, ansi (the terminal's own 16 colours), mono, high-contrast,

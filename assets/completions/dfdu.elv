@@ -40,7 +40,7 @@ set edit:completion:arg-completer[dfdu] = {|@words|
             cand --disks 'Choose a disk to browse from the mounted filesystems'
             cand --read-only 'Never delete anything: the browser leaves out its delete keys and runs cleanup commands only as dry runs'
             cand --no-history 'Do not record the scan in the history, nor show what grew since the last one'
-            cand --no-cache 'Scan PATH afresh: do not open its cached scan, nor save this one (`DFDU_CACHE=0` turns the cache off for good). Without it, the browser opens the last complete scan of PATH at once, if one is cached, and brings it up to date in the background; scans that take 3 s or more are cached for 14 days (`dfdu cache list`)'
+            cand --no-cache 'Scan PATH afresh: do not open its cached scan, nor save this one (`DFDU_CACHE=0` turns the cache off for good). Without it, the browser opens the last complete scan of PATH at once, if it is at most 1 hour old (`DFDU_CACHE_MAX_AGE`, e.g. 20m, 1h or 2d), and brings it up to date in the background; scans that take 3 s or more are kept for 14 days (`dfdu cache list`)'
             cand --no-mouse 'Do not capture the mouse (click to select, double-click to open, wheel to scroll). While it is captured, most terminals select text with Shift held down'
             cand --debug-stats 'Start with the debug panel open, and print its numbers when the browser exits'
             cand -h 'Print help (see more with ''--help'')'

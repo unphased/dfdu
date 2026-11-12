@@ -9,11 +9,25 @@ use super::*;
 #[test]
 fn load_age_values() {
     assert_eq!(configured_max_age(None), 3600);
-    for (value, seconds) in [("1s", 1), ("20m", 1200), ("1h", 3600), ("2d", 172800), ("0s", 0)] {
+    for (value, seconds) in [
+        ("1s", 1),
+        ("20m", 1200),
+        ("1h", 3600),
+        ("2d", 172800),
+        ("0s", 0),
+    ] {
         assert_eq!(parse_max_age(value), Some(seconds));
         assert_eq!(configured_max_age(Some(value.as_ref())), seconds);
     }
-    for value in ["", "20", "-1h", "1.5h", "h", "1fortnight", "18446744073709551615d"] {
+    for value in [
+        "",
+        "20",
+        "-1h",
+        "1.5h",
+        "h",
+        "1fortnight",
+        "18446744073709551615d",
+    ] {
         assert_eq!(parse_max_age(value), None);
         assert_eq!(configured_max_age(Some(value.as_ref())), 3600);
     }

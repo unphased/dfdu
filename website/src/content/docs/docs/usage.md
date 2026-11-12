@@ -124,7 +124,7 @@ Like `ncdu -x`, a scan stays on one filesystem. Add `--cross-mounts` for other l
 
 Single-root scans that took 3 s or more are cached, so the next `dfdu PATH` opens at once and refreshes in the background (`cached 3 h ago, refreshing` in the header). On macOS, Windows and btrfs only the changed directories are read again. Multi-root scans do not read or write the scan cache and are not recorded in scan history.
 
-A cache is used for 14 days and the cache keeps at most 1 GiB, readable only by you. `--no-cache` scans afresh, `DFDU_CACHE=0` turns it off, `dfdu cache list` and `dfdu cache clear` manage it.
+A cached scan is loaded only when it is at most 1 hour old. Set `DFDU_CACHE_MAX_AGE` to a whole number with `s`, `m`, `h` or `d` (for example `20m`, `1h` or `2d`) to change this limit. An invalid value warns on stderr and uses 1 hour. Older scans are scanned afresh. Cached files are kept for 14 days, with at most 1 GiB in total, readable only by you. `--no-cache` scans afresh, `DFDU_CACHE=0` turns it off, `dfdu cache list` and `dfdu cache clear` manage it.
 
 ## Deleting
 

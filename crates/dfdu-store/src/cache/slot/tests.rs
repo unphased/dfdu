@@ -5,8 +5,8 @@ use std::time::Instant;
 use dfdu_tree::Meta;
 
 use super::*;
-use crate::cache::now;
 use crate::cache::tests::{header, save, set_mtime, setup, tree_of};
+use crate::cache::{MAX_AGE, now};
 use crate::ncdu::tests::dump;
 
 /// What is saved loads back as it was: the tree, and the header.
@@ -30,18 +30,14 @@ fn a_saved_scan_loads_back() {
     assert_eq!(dump(&t, r), dump(&hit.loaded.tree, hit.loaded.root));
 }
 
-/// A file written more than the maximum age ago is not loaded and is removed; a tree whose
+/// A file written more than the maximum age ago is not loaded; a tree whose
 /// last full scan is older than a week is loaded to be rescanned whole.
 #[test]
 fn old_scans_expire() {
     let (_tmp, _cache, slot) = setup();
     let now = now();
     let (t, _) = tree_of(slot.key.root(), 3);
-    save(
-        &slot,
-        &t,
-        &header(now - FULL_RESCAN_AFTER - 10, now - FULL_RESCAN_AFTER - 10),
-    );
+    save(&slot, &t, &header(now, now - FULL_RESCAN_AFTER - 10));
     let hit = slot.load(now).unwrap().expect("a hit");
     assert!(hit.full_rescan);
     // Brought up to date from the journal since: still the old full scan.
@@ -56,7 +52,7 @@ fn old_scans_expire() {
     save(&slot, &t, &header(now - MAX_AGE - 10, now - MAX_AGE - 10));
     assert!(slot.cached(now), "the file itself is new");
     assert!(slot.load(now).unwrap().is_none());
-    assert!(!slot.path.exists(), "an expired scan is removed");
+    assert!(slot.path.exists(), "an expired scan is left for the sweep");
     save(&slot, &t, &header(now, now));
     set_mtime(&slot.path, now - MAX_AGE - 10);
     assert!(!slot.cached(now));
@@ -74,7 +70,10 @@ fn loading_obeys_max_age_without_shortening_retention() {
             set_mtime(&slot.path, now - age);
             assert_eq!(slot.cached(now), age <= max_age);
             assert_eq!(slot.load(now).unwrap().is_some(), age <= max_age);
-            assert!(slot.path.exists(), "load limit must not remove retained scans");
+            assert!(
+                slot.path.exists(),
+                "load limit must not remove retained scans"
+            );
             assert_eq!(slot.sweep(now).files, 0);
         }
         // A recent mtime cannot make an old snapshot header eligible.

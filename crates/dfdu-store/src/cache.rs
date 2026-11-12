@@ -10,8 +10,9 @@
 //! alone: only those named as the cache names them are read or removed. A damaged or cut-short
 //! file is removed, and the directory scanned instead.
 //!
-//! Expiry: a file is loaded only within [`MAX_AGE`] of being written; the sweep removes older
-//! ones, and keeps the files together under [`SIZE_CAP`] by removing the least recently
+//! Expiry: a file is loaded within one hour of being written, configurable with
+//! `DFDU_CACHE_MAX_AGE`. The sweep removes files older than [`MAX_AGE`],
+//! and keeps the files together under [`SIZE_CAP`] by removing the least recently
 //! written first. A tree whose last full scan started more than [`FULL_RESCAN_AFTER`] ago is
 //! rescanned whole when it is loaded: a change journal can miss changes, and every save would
 //! otherwise keep the cache young.
@@ -30,8 +31,10 @@ mod slot;
 
 pub use slot::{Hit, Saved, Slot};
 
-/// Seconds after it was written that a cached scan is still loaded.
+/// Seconds after it was written that a cached scan is kept by the sweep.
 pub const MAX_AGE: u64 = 14 * 86_400;
+/// Default maximum age in seconds for loading a cached scan.
+const DEFAULT_LOAD_AGE: u64 = 3600;
 /// Seconds after the last full scan started that a loaded tree is rescanned whole.
 pub const FULL_RESCAN_AFTER: u64 = 7 * 86_400;
 /// The most bytes the cached scans take together.
@@ -56,6 +59,33 @@ pub fn off_by_env() -> bool {
 fn is_off(v: &std::ffi::OsStr) -> bool {
     let v = v.to_string_lossy().to_ascii_lowercase();
     matches!(v.trim(), "0" | "false" | "no" | "off")
+}
+
+/// A whole number of seconds, minutes, hours or days, with its unit.
+fn parse_max_age(value: &str) -> Option<u64> {
+    let value = value.trim();
+    let split = value.find(|c: char| !c.is_ascii_digit())?;
+    let count: u64 = value[..split].parse().ok()?;
+    let unit = match &value[split..] {
+        "s" => 1,
+        "m" => 60,
+        "h" => 3600,
+        "d" => 86_400,
+        _ => return None,
+    };
+    count.checked_mul(unit)
+}
+
+fn configured_max_age(value: Option<&std::ffi::OsStr>) -> u64 {
+    let Some(value) = value else {
+        return DEFAULT_LOAD_AGE;
+    };
+    value.to_str().and_then(parse_max_age).unwrap_or_else(|| {
+        eprintln!(
+            "dfdu: invalid DFDU_CACHE_MAX_AGE; expected a duration such as 20m, 1h or 2d; using 1h"
+        );
+        DEFAULT_LOAD_AGE
+    })
 }
 
 /// The effective user, who owns what the cache reads and writes; 0 where users are not told
@@ -218,6 +248,7 @@ impl Key {
 #[derive(Clone, Debug)]
 pub struct Cache {
     dir: PathBuf,
+    max_age: u64,
 }
 
 /// A cached scan as `dfdu cache list` shows it.
@@ -281,7 +312,10 @@ impl Cache {
                 }
             }
         }
-        Ok(Cache { dir })
+        Ok(Cache {
+            dir,
+            max_age: configured_max_age(std::env::var_os("DFDU_CACHE_MAX_AGE").as_deref()),
+        })
     }
 
     #[must_use]

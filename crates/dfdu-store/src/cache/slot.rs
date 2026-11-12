@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use dfdu_tree::Tree;
 
 use super::{
-    Cache, FULL_RESCAN_AFTER, Key, MAX_AGE, Removed, SIZE_CAP, STEP_ENTRIES, open_own, owned, secs,
+    Cache, FULL_RESCAN_AFTER, Key, Removed, SIZE_CAP, STEP_ENTRIES, open_own, owned, secs,
 };
 use crate::ImportError;
 use crate::Limits;
@@ -50,11 +50,14 @@ pub enum Saved {
 
 impl Slot {
     /// Whether a scan is cached here that [`Slot::load`] may load at `now`: a file of the
-    /// effective user written within [`MAX_AGE`]. Only looks at the file's metadata.
+    /// effective user written within the configured load age (default one hour).
+    /// Only looks at the file's metadata.
     #[must_use]
     pub fn cached(&self, now: u64) -> bool {
         fs::symlink_metadata(&self.path).is_ok_and(|m| {
-            m.is_file() && owned(&m) && now.saturating_sub(m.modified().map_or(0, secs)) <= MAX_AGE
+            m.is_file()
+                && owned(&m)
+                && now.saturating_sub(m.modified().map_or(0, secs)) <= self.cache.max_age
         })
     }
 
@@ -70,8 +73,8 @@ impl Slot {
     }
 
     /// Reads the cached scan. `Ok(None)` when there is none to use: no file, another user's,
-    /// written more than [`MAX_AGE`] before `now` (it is removed), or of another directory or
-    /// other options.
+    /// older than the configured load age, or of another directory or other options.
+    /// Scans beyond the load age are left for the cache sweep.
     ///
     /// # Errors
     ///
@@ -89,6 +92,9 @@ impl Slot {
             }
             Err(e) => return Err(e.into()),
         };
+        if now.saturating_sub(file.metadata()?.modified().map_or(0, secs)) > self.cache.max_age {
+            return Ok(None);
+        }
         let loaded = match snapshot::read(
             io::BufReader::with_capacity(1 << 16, file),
             &Limits::default(),
@@ -100,8 +106,7 @@ impl Slot {
             }
         };
         let h = &loaded.header;
-        if now.saturating_sub(h.written) > MAX_AGE {
-            self.remove();
+        if now.saturating_sub(h.written) > self.cache.max_age {
             return Ok(None);
         }
         let same = loaded.tree.path_buf(loaded.root) == self.key.root

@@ -47,6 +47,7 @@ sequenceDiagram
 - **Matching on the slave:** same size, plus same name at any size, ranked by name, matching
   parent folders and mtime. Same-size candidates are checked in parallel with a sampled hash
   (xxh3-128 of the first and last 50 KiB plus the length).
+- **Recent caches only:** cached scans load for 1 hour by default; set `DFDU_CACHE_MAX_AGE` to a duration such as `20m`, `1h` or `2d`.
 - **Multiple roots:** `dfdu PATH PATH...` scans and browses several roots in one tree.
 - **Image preview:** JPEG, PNG and ARW files get a kitty-graphics thumbnail beside the selected
   row (kitty and Ghostty auto-detected; `DFDU_IMAGE_PREVIEW=1` forces it on, `=0` off). The

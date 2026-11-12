@@ -73,7 +73,7 @@ Show only files of these types or extensions, comma\-separated: `video,audio,.is
 Do not record the scan in the history, nor show what grew since the last one
 .TP
 \fB\-\-no\-cache\fR
-Scan PATH afresh: do not open its cached scan, nor save this one (`DFDU_CACHE=0` turns the cache off for good). Without it, the browser opens the last complete scan of PATH at once, if one is cached, and brings it up to date in the background; scans that take 3 s or more are cached for 14 days (`dfdu cache list`)
+Scan PATH afresh: do not open its cached scan, nor save this one (`DFDU_CACHE=0` turns the cache off for good). Without it, the browser opens the last complete scan of PATH at once, if it is at most 1 hour old (`DFDU_CACHE_MAX_AGE`, e.g. 20m, 1h or 2d), and brings it up to date in the background; scans that take 3 s or more are kept for 14 days (`dfdu cache list`)
 .TP
 \fB\-\-theme\fR \fI<THEME>\fR [default: auto]
 Colour theme: auto, dark, light, ansi (the terminal\*(Aqs own 16 colours), mono, high\-contrast, or NAME for the theme file NAME.toml in dfdu/themes in the configuration directory. auto asks the terminal for its background colour at start (up to 1 s if it does not answer) and picks dark or light, or ansi when the colour is unknown
