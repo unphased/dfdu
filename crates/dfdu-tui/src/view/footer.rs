@@ -46,7 +46,9 @@ pub fn status(f: &mut Frame, app: &App, area: Rect, list_view: bool) {
     let msg = app.peer.as_ref().map_or_else(
         || msg.clone(),
         |p| {
-            let mut peer = crate::peer::status_text(p.peer.id(), &p.peer.status());
+            let mut peer = app
+                .peer_background
+                .status_text(p.peer.id(), &p.peer.status());
             if !app.nav.footer.is_empty() {
                 peer.push_str(&format!(" | {}", app.nav.footer));
             }

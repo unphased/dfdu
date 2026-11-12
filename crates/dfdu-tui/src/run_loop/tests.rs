@@ -1,8 +1,8 @@
 //! A real decode through the loop, with terminal and graphics writes recorded in order.
 #[cfg(unix)]
-mod nav;
-#[cfg(unix)]
 mod discovery;
+#[cfg(unix)]
+mod nav;
 
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
@@ -201,7 +201,11 @@ fn run_actions(actions: Vec<Event>) {
 #[cfg(unix)]
 #[test]
 fn peer_status_events_redraw_idle_loop_without_keyboard_input() {
-    if discovery::isolated("run_loop::tests::peer_status_events_redraw_idle_loop_without_keyboard_input") { return; }
+    if discovery::isolated(
+        "run_loop::tests::peer_status_events_redraw_idle_loop_without_keyboard_input",
+    ) {
+        return;
+    }
     struct PairingWriter {
         bytes: Vec<u8>,
         stage: Arc<Mutex<u8>>,

@@ -165,6 +165,11 @@ where
         let tick = session.tick(now)?;
         #[cfg(unix)]
         navigation.tick(session);
+        #[cfg(unix)]
+        {
+            let app = session.front_mut();
+            app.peer_background.tick(app.peer.as_ref(), now);
+        }
         // What the scanned host answered the go-to prompt, which the tick took in.
         let answered = goto::poll(session.front_mut());
         let motion_due = (session.front().motion.next_frame_at()).is_some_and(|t| now >= t);
@@ -195,11 +200,19 @@ where
             }
         }
 
-        let wake = [session.wake_at(now), session.front().motion.next_frame_at()]
-            .into_iter()
-            .flatten()
-            .min()
-            .map_or(IDLE, |t| t.saturating_duration_since(now));
+        #[cfg(unix)]
+        let discovery_wake = session.front().peer_background.wake_at();
+        #[cfg(not(unix))]
+        let discovery_wake = None;
+        let wake = [
+            session.wake_at(now),
+            session.front().motion.next_frame_at(),
+            discovery_wake,
+        ]
+        .into_iter()
+        .flatten()
+        .min()
+        .map_or(IDLE, |t| t.saturating_duration_since(now));
         #[cfg(unix)]
         let panel_results = crate::peer::results(session.front());
         #[cfg(not(unix))]
@@ -208,7 +221,23 @@ where
         let nav_results = navigation.workers.results.clone();
         #[cfg(not(unix))]
         let nav_results = crossbeam_channel::never::<()>();
+        #[cfg(unix)]
+        let discovery_results = session.front().peer_background.results();
+        #[cfg(not(unix))]
+        let discovery_results = crossbeam_channel::never::<()>();
         select! {
+            recv(discovery_results) -> result => {
+                #[cfg(unix)]
+                if let Ok(result) = result {
+                    let app = session.front_mut();
+                    if let Some(options) = &app.peer {
+                        app.peer_background.complete(options.peer.id(), &options.peer.status(), result);
+                    }
+                }
+                #[cfg(not(unix))]
+                let _ = result;
+                input_dirty = true;
+            },
             recv(nav_results) -> result => {
                 #[cfg(unix)]
                 if let Ok(result) = result { navigation.complete(session.front_mut(), result); }

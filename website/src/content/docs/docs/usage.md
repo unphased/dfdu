@@ -37,6 +37,10 @@ Unreadable entries are marked `!` with the reason. Press `!` to list them all.
 Start two independent browsers with `dfdu PATH`. Peer mode is on by default for local
 interactive browsers on a terminal. Use `--no-peer` to opt out; `--peer` remains accepted.
 Subcommands and piped output do not start peer mode. Each browser gets a short random ID.
+While unbound, the browser discovers hosts at startup and about every 10 seconds.
+The footer shows `◆ HOST found · B to connect`, or a count when several hosts answer.
+Hosts disappear after three unanswered rounds. Binding stops these background probes
+and hides the notice; unbinding starts discovery again.
 Press `B` to open the peers panel. Select a local instance or a discovered host with
 Enter. Selecting a host fetches its instances through SSH; Enter then binds an instance.
 Press `r` to refresh or `m` for manual `ID`, `HOST ID` or `HOST:ID` entry.

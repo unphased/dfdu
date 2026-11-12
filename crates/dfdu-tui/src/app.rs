@@ -61,6 +61,8 @@ pub struct App {
     #[cfg(unix)]
     pub(crate) peer_panel: Option<crate::peer::Panel>,
     #[cfg(unix)]
+    pub(crate) peer_background: crate::peer::Background,
+    #[cfg(unix)]
     pub(crate) nav: crate::peer::nav::State,
     pub theme: Theme,
     /// The terminal's colour level, which a theme chosen in the palette is resolved for. It
@@ -109,6 +111,8 @@ impl App {
             peer_prompt: None,
             #[cfg(unix)]
             peer_panel: None,
+            #[cfg(unix)]
+            peer_background: crate::peer::Background::default(),
             #[cfg(unix)]
             nav: crate::peer::nav::State::default(),
             color_level: theme.level(),

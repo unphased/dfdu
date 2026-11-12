@@ -49,6 +49,85 @@ pub(crate) fn status_text(id: &str, status: &dfdu_peer::Status) -> String {
     )
 }
 
+type DiscoveryResult = std::io::Result<Vec<dfdu_peer::Beacon>>;
+
+/// One discovery round at a time. Hosts expire after three unanswered rounds.
+#[derive(Debug, Default)]
+pub(crate) struct Background {
+    hosts: std::collections::BTreeMap<String, u8>,
+    pending: Option<crossbeam_channel::Receiver<DiscoveryResult>>,
+    next: Option<std::time::Instant>,
+}
+
+impl Background {
+    pub(crate) fn tick(&mut self, options: Option<&PeerOptions>, now: std::time::Instant) {
+        let Some(options) = options else { return };
+        if options.peer.status().role != dfdu_peer::Role::Unbound {
+            self.hosts.clear();
+            self.next = None;
+            return;
+        }
+        if self.pending.is_some() || self.next.is_some_and(|next| now < next) {
+            return;
+        }
+        let id = options.peer.id().to_owned();
+        let (tx, rx) = crossbeam_channel::bounded(1);
+        self.pending = Some(rx);
+        self.next = Some(now + std::time::Duration::from_secs(10));
+        std::thread::spawn(move || {
+            let _ = tx.send(dfdu_peer::discover_for(&id));
+        });
+    }
+
+    pub(crate) fn wake_at(&self) -> Option<std::time::Instant> {
+        self.next.filter(|_| self.pending.is_none())
+    }
+
+    pub(crate) fn results(&self) -> crossbeam_channel::Receiver<DiscoveryResult> {
+        self.pending
+            .clone()
+            .unwrap_or_else(crossbeam_channel::never)
+    }
+
+    pub(crate) fn complete(
+        &mut self,
+        id: &str,
+        status: &dfdu_peer::Status,
+        result: DiscoveryResult,
+    ) {
+        self.pending = None;
+        if status.role != dfdu_peer::Role::Unbound {
+            self.hosts.clear();
+            return;
+        }
+        for missed in self.hosts.values_mut() {
+            *missed += 1;
+        }
+        for beacon in result.unwrap_or_default() {
+            if beacon.ids.iter().any(|other| other != id) {
+                self.hosts.insert(beacon.host, 0);
+            }
+        }
+        self.hosts.retain(|_, missed| *missed < 3);
+    }
+
+    pub(crate) fn status_text(&self, id: &str, status: &dfdu_peer::Status) -> String {
+        let mut text = status_text(id, status);
+        if status.role == dfdu_peer::Role::Unbound && !self.hosts.is_empty() {
+            let found = if self.hosts.len() == 1 {
+                self.hosts.keys().next().unwrap().clone()
+            } else {
+                format!("{} peers", self.hosts.len())
+            };
+            text.push_str(&format!(
+                " · ◆ {found} found · {} to connect",
+                crate::app::keys::first_key(crate::app::keys::Action::Peer)
+            ));
+        }
+        text
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct Panel {
     rows: Vec<Row>,
@@ -608,27 +687,61 @@ mod tests {
     #[test]
     fn discovered_hosts_footer_and_expiry() {
         let mut background = Background::default();
-        let unbound = dfdu_peer::Status { role: dfdu_peer::Role::Unbound, peer: None };
+        let unbound = dfdu_peer::Status {
+            role: dfdu_peer::Role::Unbound,
+            peer: None,
+        };
         let beacon = |host: &str, ids: &[&str]| dfdu_peer::Beacon {
-            host: host.into(), user: "slu".into(),
+            host: host.into(),
+            user: "slu".into(),
             ids: ids.iter().map(|s| (*s).into()).collect(),
             source: "127.0.0.1".parse().unwrap(),
         };
-        assert_eq!(background.status_text("self", &unbound), "peer self unbound");
-        background.complete("self", &unbound, Ok(vec![beacon("own", &["self"]), beacon("nas", &["remote"])]));
-        assert_eq!(background.status_text("self", &unbound), "peer self unbound · ◆ nas found · B to connect");
-        background.complete("self", &unbound, Ok(vec![beacon("local", &["self", "other"])]));
-        assert_eq!(background.status_text("self", &unbound), "peer self unbound · ◆ 2 peers found · B to connect");
+        assert_eq!(
+            background.status_text("self", &unbound),
+            "peer self unbound"
+        );
+        background.complete(
+            "self",
+            &unbound,
+            Ok(vec![beacon("own", &["self"]), beacon("nas", &["remote"])]),
+        );
+        assert_eq!(
+            background.status_text("self", &unbound),
+            "peer self unbound · ◆ nas found · B to connect"
+        );
+        background.complete(
+            "self",
+            &unbound,
+            Ok(vec![beacon("local", &["self", "other"])]),
+        );
+        assert_eq!(
+            background.status_text("self", &unbound),
+            "peer self unbound · ◆ 2 peers found · B to connect"
+        );
         for role in [dfdu_peer::Role::Master, dfdu_peer::Role::Slave] {
-            let bound = dfdu_peer::Status { role, peer: Some("remote".into()) };
-            assert_eq!(background.status_text("self", &bound), status_text("self", &bound));
+            let bound = dfdu_peer::Status {
+                role,
+                peer: Some("remote".into()),
+            };
+            assert_eq!(
+                background.status_text("self", &bound),
+                status_text("self", &bound)
+            );
         }
         background.complete("self", &unbound, Ok(vec![]));
         assert!(background.status_text("self", &unbound).contains("2 peers"));
         background.complete("self", &unbound, Ok(vec![]));
-        assert!(background.status_text("self", &unbound).contains("local found"));
+        assert!(
+            background
+                .status_text("self", &unbound)
+                .contains("local found")
+        );
         background.complete("self", &unbound, Ok(vec![]));
-        assert_eq!(background.status_text("self", &unbound), "peer self unbound");
+        assert_eq!(
+            background.status_text("self", &unbound),
+            "peer self unbound"
+        );
     }
 
     #[test]
