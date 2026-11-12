@@ -539,3 +539,43 @@ fn navigation_mailbox_is_latest_only_and_rejects_oversized_frames() {
         "{\"nav_status\":{\"seq\":1,\"best\":null,\"candidates\":0,\"verdict\":\"none\"}}"
     );
 }
+
+#[test]
+fn swap_handshake_ignores_wrong_role_and_duplicate_frames() {
+    let (a, b) = UnixStream::pair().unwrap();
+    let mut master = Link::new(a, None, Role::Master, "a", "host").unwrap();
+    let mut slave = Link::new(b, None, Role::Slave, "b", "host").unwrap();
+    master.poll().unwrap();
+    slave.poll().unwrap();
+    master.poll().unwrap();
+    assert!(master.ready && slave.ready);
+    slave.start_swap();
+    assert!(!slave.swapping);
+    // An unsolicited ack or a swap sent by the slave changes nothing.
+    slave.queue(Frame::Swap {});
+    slave.queue(Frame::SwapOk {});
+    slave.flush().unwrap();
+    master.poll().unwrap();
+    assert_eq!(master.role, Role::Master);
+    master.sent_seq = Some(99);
+    slave.received_seq = Some(99);
+    master.start_swap();
+    master.start_swap();
+    master.queue(Frame::Swap {}); // duplicate request in the same read
+    master.flush().unwrap();
+    slave.poll().unwrap();
+    assert_eq!(slave.role, Role::Master);
+    assert_eq!(slave.received_seq, None);
+    assert_eq!(master.role, Role::Master); // waits for ack
+    slave.flush().unwrap();
+    master.poll().unwrap();
+    assert_eq!(master.role, Role::Slave);
+    assert!(!master.swapping);
+    assert_eq!(master.sent_seq, None);
+    slave.queue(Frame::SwapOk {}); // duplicate ack
+    slave.flush().unwrap();
+    master.poll().unwrap();
+    assert_eq!(master.role, Role::Slave);
+    assert_eq!(serde_json::to_string(&Frame::Swap {}).unwrap(), r#"{"swap":{}}"#);
+    assert_eq!(serde_json::to_string(&Frame::SwapOk {}).unwrap(), r#"{"swap_ok":{}}"#);
+}
