@@ -59,6 +59,7 @@ sequenceDiagram
 
 **Keys:** `B` connect (or unbind) · Enter binds the selected peer · `W` swap roles (master
 only) · `C` focus the candidate list on the slave, Enter jumps, Esc returns.
+`/` filters fuzzily; `n` / `N` jump between visible case-insensitive substring hits, wrapping; `A` sorts by name.
 
 **Install** on each machine: `make install` (needs `~/.vim/jpg-preview` beside it). Put
 `~/.local/bin` before any upstream `dfdu` on your PATH. The remote side is always called as

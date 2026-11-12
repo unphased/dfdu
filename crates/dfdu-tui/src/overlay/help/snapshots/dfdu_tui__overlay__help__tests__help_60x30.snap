@@ -19,16 +19,16 @@ expression: frame
   ┃ ← h Backspace <  parent directory (tree mode:        ┃
   ┃                  collapse)                           ┃
   ┃ Ctrl-G           go to folder…                       ┃
+  ┃ n                next exact filter match             ┃
+  ┃ N                previous exact filter match         ┃
   ┃                                                      ┃
   ┃ Sort                                                 ┃
   ┃ s  sort by size (again: reverse)                     ┃
-  ┃ n  sort by name (again: reverse)                     ┃
+  ┃ A  sort by name (again: reverse)                     ┃
   ┃ C  sort by items (again: reverse)                    ┃
   ┃ M  sort by modification time (again: reverse)        ┃
   ┃ S  re-sort now                                       ┃
   ┃                                                      ┃
   ┃ Display                                              ┃
-  ┃ 1  Files view: the entries of this directory         ┃
-  ┃ 2  Map view: this directory as a treemap             ┃
   ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ↓ more ┛
  ↑↓ scroll  PgUp PgDn page  / search  Esc close

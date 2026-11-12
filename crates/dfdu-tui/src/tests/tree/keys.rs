@@ -49,6 +49,28 @@ pub(crate) fn selected(app: &App) -> String {
 }
 
 #[test]
+fn exact_filter_jumps_follow_visible_tree_rows() {
+    let fx = small();
+    let t0 = Instant::now();
+    let mut app = tree_app(&fx, t0);
+    key(&mut app, &fx, KeyCode::Right, t0);
+    for code in [KeyCode::Char('/'), KeyCode::Char('a'), KeyCode::Enter] {
+        key(&mut app, &fx, code, t0);
+    }
+    assert_eq!(selected(&app), "a");
+    for (code, name, status) in [
+        ('n', "a1", "exact 2/3"),
+        ('n', "a2", "exact 3/3"),
+        ('n', "a", "exact 1/3"),
+        ('N', "a2", "exact 3/3"),
+    ] {
+        key(&mut app, &fx, KeyCode::Char(code), t0);
+        assert_eq!(selected(&app), name);
+        assert_eq!(app.session.status.as_deref(), Some(status));
+    }
+}
+
+#[test]
 fn t_turns_tree_mode_on_and_off() {
     let fx = small();
     let t0 = Instant::now();

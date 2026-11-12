@@ -43,5 +43,5 @@ L15 52-99 fg=#7b8394
 L21 0-58 fg=#ebcb8b
  ▸ Library/  112.0 GiB · 812.0k items                                                           1/6
 L22 0-2 fg=#88c0d0 bold | 3-10 fg=#8fbcf0 bold | 22-36 fg=#8b94a7 | 96-99 fg=#8b94a7
- ↑↓ move  → open  ← up  s n C M sort  S re-sort  Space mark  / filter  ! errors  ? help  q quit
+ ↑↓ move  → open  ← up  s A C M sort  S re-sort  Space mark  / filter  ! errors  ? help  q quit
 L23 1-2 fg=#88c0d0 bold | 3-7 fg=#8b94a7 | 10-10 fg=#88c0d0 bold | 11-15 fg=#8b94a7 | 18-18 fg=#88c0d0 bold | 19-21 fg=#8b94a7 | 24-30 fg=#88c0d0 bold | 31-35 fg=#8b94a7 | 38-38 fg=#88c0d0 bold | 39-46 fg=#8b94a7 | 49-53 fg=#88c0d0 bold | 54-58 fg=#8b94a7 | 61-61 fg=#88c0d0 bold | 62-68 fg=#8b94a7 | 71-71 fg=#88c0d0 bold | 72-78 fg=#8b94a7 | 81-81 fg=#88c0d0 bold | 82-86 fg=#8b94a7 | 89-89 fg=#88c0d0 bold | 90-94 fg=#8b94a7

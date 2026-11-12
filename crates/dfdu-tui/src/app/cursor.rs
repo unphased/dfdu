@@ -8,6 +8,46 @@ use dfdu_tree::HostPath;
 use super::App;
 
 impl App {
+    /// Jumps among literal substring hits in the visible Files rows, without changing the filter.
+    pub(crate) fn jump_match(&mut self, backwards: bool) {
+        let query = self.session.filter.query();
+        if query.is_empty() {
+            return;
+        }
+        let needle = query.to_lowercase();
+        let hits: Vec<usize> = self
+            .session
+            .list
+            .rows
+            .iter()
+            .enumerate()
+            .filter_map(|(row, &i)| {
+                let e = &self.session.snap.entries[i];
+                (!e.pseudo
+                    && String::from_utf8_lossy(&e.name)
+                        .to_lowercase()
+                        .contains(&needle))
+                .then_some(row)
+            })
+            .collect();
+        if hits.is_empty() {
+            self.session.status = Some(format!("no exact match for \"{query}\""));
+            return;
+        }
+        let current = self.session.selected_index();
+        let at = if backwards {
+            hits.iter()
+                .rposition(|&row| current.is_some_and(|c| row < c))
+                .unwrap_or(hits.len() - 1)
+        } else {
+            hits.iter()
+                .position(|&row| current.is_none_or(|c| row > c))
+                .unwrap_or(0)
+        };
+        self.session.move_to(hits[at]);
+        self.session.status = Some(format!("exact {}/{}", at + 1, hits.len()));
+    }
+
     /// Keeps the scroll of the directory left, and puts back that of the directory opened.
     pub(crate) fn moved(&mut self, m: Moved) {
         self.scrolls.insert(m.left, self.scroll);
@@ -70,24 +110,32 @@ mod tests {
         let t0 = Instant::now();
         let mut app = App::new(Theme::no_color(), t0);
         app.refresh(
-            snap_with_totals(vec![
-                test_entry(0, "PYthon", 40),
-                test_entry(1, "partly", 30),
-                test_entry(2, "copy", 20),
-                test_entry(3, "hidden", 10),
-            ], 1), t0,
+            snap_with_totals(
+                vec![
+                    test_entry(0, "PYthon", 40),
+                    test_entry(1, "partly", 30),
+                    test_entry(2, "copy", 20),
+                    test_entry(3, "hidden", 10),
+                ],
+                1,
+            ),
+            t0,
         );
         filter::open(&mut app.session);
         for c in query.chars() {
             filter::edit(&mut app.session, TextOp::Insert(c));
         }
+        app.session.request_refilter();
         app.reorder(t0);
         filter::edit(&mut app.session, TextOp::Submit);
         (app, t0)
     }
 
     fn hit(app: &mut App, t0: Instant, c: char) {
-        app.key(crate::tests::press(ratatui::crossterm::event::KeyCode::Char(c)), t0);
+        app.key(
+            crate::tests::press(ratatui::crossterm::event::KeyCode::Char(c)),
+            t0,
+        );
     }
 
     #[test]
@@ -117,7 +165,10 @@ mod tests {
         for key in ['n', 'N'] {
             hit(&mut app, t0, key);
             assert_eq!(selected(&app), before);
-            assert_eq!(app.session.status.as_deref(), Some("no exact match for \"pl\""));
+            assert_eq!(
+                app.session.status.as_deref(),
+                Some("no exact match for \"pl\"")
+            );
         }
         let (mut app, t0) = filtered_browser("");
         for key in ['n', 'N'] {
@@ -134,7 +185,13 @@ mod tests {
         assert_eq!(app.session.sort.key, crate::state::order::SortKey::Name);
         hit(&mut app, t0, 'n');
         assert_eq!(app.session.sort.key, crate::state::order::SortKey::Name);
-        assert!(app.session.status.as_deref().unwrap_or("").starts_with("exact "));
+        assert!(
+            app.session
+                .status
+                .as_deref()
+                .unwrap_or("")
+                .starts_with("exact ")
+        );
     }
 
     #[test]

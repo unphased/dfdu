@@ -21,7 +21,7 @@ Keys follow ncdu. Press `?` in the app for the full list.
 | Key | Action | Key | Action |
 | --- | --- | --- | --- |
 | `↑↓←→` / `hjkl` | Move, open, go back | `1` `2` | List, treemap |
-| `s` `n` `C` `M` | Sort by size, name, count, date | `3` | Cleanup |
+| `s` `A` `C` `M` | Sort by size, name, count, date | `3` | Cleanup |
 | `T` | Tree mode | `4` | Duplicates |
 | `/` `t` | Filter by name, by file type | `5` | Largest files |
 | `v` | Mark a range | `d` | Move to Trash |
@@ -30,6 +30,8 @@ Keys follow ncdu. Press `?` in the app for the full list.
 | `Ctrl-G` | Go to a folder | `?` | All keys |
 | `B` | Bind or unbind (peer mode) | | |
 | `W` | Swap peer roles (master only) | | |
+
+In Files, `/` filters names fuzzily. With a filter kept, `n` and `N` jump to the next and previous visible name containing the whole filter text as a case-insensitive substring, wrapping at the ends. This also works in tree mode. The status shows `exact 3/7`, or `no exact match for "foo"`. With no filter, both keys do nothing. `A` sorts by name.
 
 Unreadable entries are marked `!` with the reason. Press `!` to list them all.
 

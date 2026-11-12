@@ -6,13 +6,13 @@ expression: "styled(&frame(state, theme(name, level)))"
 L0 0-5 bold | 6-6 fg=darkgray | 7-15 fg=cyan bold reversed | 16-62 fg=darkgray | 83-98 fg=cyan
  /home/jo                                          1.9M items · 241.6 GiB · 1 error   size ↓ · disk
 L1 1-8 bold | 51-63 fg=darkgray | 64-72 bold | 73-75 fg=darkgray | 76-82 fg=red | 92-94 fg=darkgray
-        size┌ Commands 18/68 ──────────────────────────────────────────────────────────┐
+        size┌ Commands 18/70 ──────────────────────────────────────────────────────────┐
 L2 0-11 fg=darkgray | 88-99 fg=darkgray
  ⠋ 112.0 GiB│ : sort▌                                                                  │
 L3 0-11 reversed | 13-14 bold | 20-20 bold | 88-99 reversed
  ⠙  78.0 GiB│ sort by size (again: reverse)                                    sort  s │
 L4 0-11 fg=darkgray | 13-13 reversed | 14-17 fg=cyan underlined reversed | 18-78 reversed | 79-82 fg=darkgray reversed | 83-84 reversed | 85-85 bold reversed | 86-86 reversed
-    51.0 GiB│ sort by name (again: reverse)                                    sort  n │
+    51.0 GiB│ sort by name (again: reverse)                                    sort  A │
 L5 14-17 fg=cyan underlined | 79-82 fg=darkgray | 85-85 bold
    625.0 MiB│ sort by items (again: reverse)                                   sort  C │
 L6 14-17 fg=cyan underlined | 79-82 fg=darkgray | 85-85 bold

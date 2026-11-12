@@ -270,6 +270,18 @@ impl App {
         self.session.status = None;
         self.session.up_armed = armed;
         match keys::action_for(&k) {
+            // These view-specific keys predate the Files bindings.
+            Some(keys::Action::SortName)
+                if matches!(
+                    views::current(self),
+                    views::View::Cleanup | views::View::Duplicates
+                ) =>
+            {
+                keys::run(self, keys::Action::TickSuggested)
+            }
+            Some(keys::Action::PrevMatch) if views::current(self) == views::View::Cleanup => {
+                keys::run(self, keys::Action::CleanupCommand)
+            }
             Some(a) => keys::run(self, a),
             None => Vec::new(),
         }

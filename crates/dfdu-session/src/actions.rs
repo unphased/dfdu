@@ -21,6 +21,8 @@ pub enum Action {
     PeerSwap,
     SortSize,
     SortName,
+    NextMatch,
+    PrevMatch,
     SortItems,
     SortMtime,
     Resort,
@@ -160,6 +162,18 @@ pub const ACTIONS: &[ActionInfo] = &[
     ),
     row(Action::GoTo, "Ctrl-G", "go to folder…", Group::Navigate),
     row(
+        Action::NextMatch,
+        "n",
+        "next exact filter match",
+        Group::Navigate,
+    ),
+    row(
+        Action::PrevMatch,
+        "N",
+        "previous exact filter match",
+        Group::Navigate,
+    ),
+    row(
         Action::Peer,
         "B",
         "bind / unbind peer (TARGET)",
@@ -179,7 +193,7 @@ pub const ACTIONS: &[ActionInfo] = &[
     ),
     row(
         Action::SortName,
-        "n",
+        "A",
         "sort by name (again: reverse)",
         Group::Sort,
     ),

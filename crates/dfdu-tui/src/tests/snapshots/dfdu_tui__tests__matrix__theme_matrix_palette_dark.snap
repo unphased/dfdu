@@ -6,13 +6,13 @@ expression: "styled(&frame(state, theme(name, level)))"
 L0 0-5 fg=#eceff4 bold | 6-6 fg=#8b94a7 | 7-15 fg=#88c0d0 bold reversed | 16-62 fg=#8b94a7 | 83-98 fg=#88c0d0
  /home/jo                                          1.9M items · 241.6 GiB · 1 error   size ↓ · disk
 L1 1-8 fg=#eceff4 bold | 51-63 fg=#8b94a7 | 64-72 fg=#eceff4 bold | 73-75 fg=#8b94a7 | 76-82 fg=#ff8f8f | 92-94 fg=#8b94a7
-        size┌ Commands 18/68 ──────────────────────────────────────────────────────────┐
+        size┌ Commands 18/70 ──────────────────────────────────────────────────────────┐
 L2 0-11 fg=#8b94a7 | 88-99 fg=#8b94a7
  ⠋ 112.0 GiB│ : sort▌                                                                  │
 L3 0-11 fg=#d8dee9 bg=#4c566a bold | 13-14 fg=#88c0d0 bold | 20-20 fg=#88c0d0 bold | 88-99 fg=#eceff4 bg=#4c566a bold
  ⠙  78.0 GiB│ sort by size (again: reverse)                                    sort  s │
 L4 0-11 fg=#8b94a7 | 13-13 fg=#eceff4 bg=#4c566a bold | 14-17 fg=#f0c674 bg=#4c566a bold underlined | 18-78 fg=#eceff4 bg=#4c566a bold | 79-82 fg=#8b94a7 bg=#4c566a bold | 83-84 fg=#eceff4 bg=#4c566a bold | 85-85 fg=#88c0d0 bg=#4c566a bold | 86-86 fg=#eceff4 bg=#4c566a bold
-    51.0 GiB│ sort by name (again: reverse)                                    sort  n │
+    51.0 GiB│ sort by name (again: reverse)                                    sort  A │
 L5 14-17 fg=#f0c674 underlined | 79-82 fg=#8b94a7 | 85-85 fg=#88c0d0 bold
    625.0 MiB│ sort by items (again: reverse)                                   sort  C │
 L6 14-17 fg=#f0c674 underlined | 79-82 fg=#8b94a7 | 85-85 fg=#88c0d0 bold

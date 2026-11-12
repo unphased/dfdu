@@ -59,6 +59,9 @@ fn front_end(app: &mut App, a: Action) -> Vec<Effect> {
             app.columns = app.columns.next();
             app.session.status = Some(app.columns.describe().into());
         }
+        Action::NextMatch | Action::PrevMatch if views::current(app) == View::Files => {
+            app.jump_match(a == Action::PrevMatch);
+        }
         Action::Help => help::open(app),
         Action::Palette => palette::open(app),
         Action::Debug => debug::toggle(app),

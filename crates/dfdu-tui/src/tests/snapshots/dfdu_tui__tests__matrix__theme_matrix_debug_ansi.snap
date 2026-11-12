@@ -36,5 +36,5 @@ L8 0-1 fg=yellow | 2-11 fg=darkgray | 14-29 fg=cyan | 40-45 fg=darkgray | 48-51 
 L21 0-58 fg=yellow
  ▸ Library/  112.0 GiB · 812.0k items                                                           1/6
 L22 0-2 bold | 3-10 fg=blue bold | 22-36 fg=darkgray | 96-99 fg=darkgray
- ↑↓ move  → open  ← up  s n C M sort  S re-sort  Space mark  / filter  ! errors  ? help  q quit
+ ↑↓ move  → open  ← up  s A C M sort  S re-sort  Space mark  / filter  ! errors  ? help  q quit
 L23 1-2 bold | 3-7 fg=darkgray | 10-10 bold | 11-15 fg=darkgray | 18-18 bold | 19-21 fg=darkgray | 24-30 bold | 31-35 fg=darkgray | 38-38 bold | 39-46 fg=darkgray | 49-53 bold | 54-58 fg=darkgray | 61-61 bold | 62-68 fg=darkgray | 71-71 bold | 72-78 fg=darkgray | 81-81 bold | 82-86 fg=darkgray | 89-89 bold | 90-94 fg=darkgray

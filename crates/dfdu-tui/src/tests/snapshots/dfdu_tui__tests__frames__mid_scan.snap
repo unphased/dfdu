@@ -13,4 +13,4 @@ expression: "text(&mid_scan(Theme::no_color()))"
  ~       0 B                      0.0%       1  nfs/  not responding
  1 directory is not responding: wait, or press x to skip it
  ▸ Library/  112.0 GiB · 812.0k items                                                           1/6
- ↑↓ move  → open  ← up  s n C M sort  S re-sort  Space mark  / filter  ! errors  ? help  q quit
+ ↑↓ move  → open  ← up  s A C M sort  S re-sort  Space mark  / filter  ! errors  ? help  q quit

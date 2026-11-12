@@ -16,7 +16,7 @@ fn sort_keys_apply_without_a_new_snapshot() {
     app.refresh(snap_without_totals(es, 1), t0);
     app.key(press(KeyCode::Down), t0);
     let picked = app.session.selected.as_ref().and_then(|s| s.node);
-    app.key(press(KeyCode::Char('n')), t0);
+    app.key(press(KeyCode::Char('A')), t0);
     app.reorder(t0);
     let names: Vec<&[u8]> = app
         .session

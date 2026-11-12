@@ -33,4 +33,4 @@ expression: "render(&mut dev(t0), t0, 120, 32)"
    360.0 MiB  ▎                           0.2%     100                project-25/                                      │
    350.0 MiB  ▎                           0.2%     100                project-26/                                      │
  ▸ experiment/  16.3 GiB · 108.2k items · ↔ 196.5 MiB also used outside the scan · +2.1 GiB since 2026-10-18       3/61
- ↑↓ move  → open  ← up  s n C M sort  Space mark  / filter  i details  : commands  ? help  q quit  [ ] views
+ ↑↓ move  → open  ← up  s A C M sort  Space mark  / filter  i details  : commands  ? help  q quit  [ ] views

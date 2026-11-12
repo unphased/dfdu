@@ -36,7 +36,7 @@ fn help_lists_every_action() {
     let mut app = app_with_help(t0);
     // One column on a tall screen: everything fits, and each action shows its keys before
     // its label.
-    let frame = render(&mut app, t0, 76, 100);
+    let frame = render(&mut app, t0, 76, 110);
     assert!(!frame.contains("↓ more"), "{frame}");
     let rows = inside(&frame);
     for info in ACTIONS {

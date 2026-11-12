@@ -21,4 +21,4 @@ expression: out
                                                                                 │ ▏            1000 B  d.txt           │
                                                                                 ╰────────────────────────────── ↓ more ╯
  ▸ proj/  78.6 KiB · 11 items · ↔ 5.9 KiB also used outside the scan                                                1/2
- ↑↓ move  → open  ← up  s n C M sort  Space mark  / filter  i details  : commands  ! errors  ? help  q quit  [ ] views
+ ↑↓ move  → open  ← up  s A C M sort  Space mark  / filter  i details  : commands  ! errors  ? help  q quit  [ ] views

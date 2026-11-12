@@ -6,7 +6,7 @@ use ratatui::crossterm::event::{KeyEvent, KeyModifiers};
 use super::*;
 use crate::app::App;
 
-const ALL: [Action; 64] = [
+const ALL: [Action; 66] = [
     Action::Quit,
     Action::Up,
     Action::Down,
@@ -24,6 +24,8 @@ const ALL: [Action; 64] = [
     Action::PeerSwap,
     Action::SortSize,
     Action::SortName,
+    Action::NextMatch,
+    Action::PrevMatch,
     Action::SortItems,
     Action::SortMtime,
     Action::Resort,
@@ -85,7 +87,18 @@ fn every_action_has_one_registry_row() {
         assert!(!r.label.is_empty(), "{:?} has no label", r.action);
         for k in r.keys.split_whitespace() {
             let parsed = parse(k).unwrap_or_else(|| panic!("{:?}: bad key {k}", r.action));
-            assert!(claimed.insert(parsed), "{k} is bound twice");
+            if !claimed.insert(parsed) {
+                let shared: Vec<_> = ACTIONS
+                    .iter()
+                    .filter(|info| info.keys.split_whitespace().any(|key| key == k))
+                    .map(|info| info.action)
+                    .collect();
+                assert!(
+                    shared == [Action::SortName, Action::TickSuggested]
+                        || shared == [Action::PrevMatch, Action::CleanupCommand],
+                    "{k} is bound twice without a view-specific override"
+                );
+            }
         }
     }
     let groups: HashSet<_> = ACTIONS.iter().map(|r| format!("{:?}", r.group)).collect();

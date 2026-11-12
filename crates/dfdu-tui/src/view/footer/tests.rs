@@ -43,7 +43,7 @@ fn hints_change_with_context() {
     let mut list = app(false, 0, t0);
     assert_eq!(
         shown(&list, 120),
-        " ↑↓ move  → open  ← up  s n C M sort  Space mark  / filter  i details  : commands  \
+        " ↑↓ move  → open  ← up  s A C M sort  Space mark  / filter  i details  : commands  \
          ? help  q quit  [ ] views"
     );
     let scanning = app(true, 0, t0);
@@ -64,7 +64,7 @@ fn hints_change_with_context() {
     list.key(press(KeyCode::Char(' ')), t0);
     assert_eq!(
         shown(&list, 120),
-        " ↑↓ move  → open  ← up  Space mark  d trash marked  D delete marked  s n C M sort  \
+        " ↑↓ move  → open  ← up  Space mark  d trash marked  D delete marked  s A C M sort  \
          / filter  : commands  ? help  q quit"
     );
     list.key(press(KeyCode::Char('D')), t0);

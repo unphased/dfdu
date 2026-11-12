@@ -387,7 +387,7 @@ mod tests {
         let low = render(&mut app, t0, 100, 15);
         assert!(!low.contains("Debug"), "{low}");
         // Not modal: the list keeps its keys while it is open, and F12 closes it.
-        let fx = app.key(press(KeyCode::Char('n')), t0);
+        let fx = app.key(press(KeyCode::Char('A')), t0);
         assert!(fx.is_empty());
         let sorted = render(&mut app, t0, 100, 20);
         assert!(

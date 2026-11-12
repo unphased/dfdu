@@ -3,7 +3,7 @@ source: crates/dfdu-tui/src/overlay/palette.rs
 expression: frame
 ---
  dfdu │ 1 Files │ 2 Map │ 3 Cleanup │ 4 Duplicates │ 5 Largest                     ⠋ scanning 00:00
- /r         ┌ Commands 68/68 ──────────────────────────────────────────────────────────┐ze ↓ · disk
+ /r         ┌ Commands 70/70 ──────────────────────────────────────────────────────────┐ze ↓ · disk
         size│ : ▌                                                                      │
      3.0 GiB│ tick what Cleanup or Duplicates suggests deleting                 act  A │
    625.0 MiB│ duplicates: compare the files again                               act  R │

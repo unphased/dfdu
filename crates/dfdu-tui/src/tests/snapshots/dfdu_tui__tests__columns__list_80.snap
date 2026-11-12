@@ -25,4 +25,4 @@ expression: "render(&mut dev(t0), t0, 80, 24)"
      1.9 GiB  ▌               1.2%  ↔ ReadingJourney/                          │
      1.5 GiB  ▌               0.9%    MaterialKolorBuilder/                    │
  ▸ experiment/  16.3 GiB · ↔ 196.5 MiB also used outside the scan · +2.1 … 3/61
- ↑↓ move  → open  ← up  s n C M sort  Space mark  / filter  ? help  q quit
+ ↑↓ move  → open  ← up  s A C M sort  Space mark  / filter  ? help  q quit

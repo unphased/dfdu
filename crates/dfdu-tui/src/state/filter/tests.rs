@@ -147,8 +147,8 @@ fn enter_keeps_filter_esc_clears() {
         line_text(&app).as_deref(),
         Some(" filter: \"dow\" (1 of 7)   / edit  Esc clear")
     );
-    // Keys go to the list again: `n` sorts by name instead of being typed.
-    app.key(press(KeyCode::Char('n')), t0);
+    // Keys go to the list again: `A` sorts by name instead of being typed.
+    app.key(press(KeyCode::Char('A')), t0);
     app.reorder(t0);
     assert_eq!(app.session.sort.key, crate::state::order::SortKey::Name);
     assert_eq!(row_names(&app), ["Downloads"]);
@@ -268,7 +268,7 @@ fn filter_keeps_sort_order() {
     filter_by(&mut app, "/o", t0);
     assert_eq!(row_names(&app), by_size);
     app.key(press(KeyCode::Enter), t0);
-    app.key(press(KeyCode::Char('n')), t0);
+    app.key(press(KeyCode::Char('A')), t0);
     app.reorder(t0);
     let filtered_by_name = row_names(&app);
     // Clearing the filter keeps the selected entry selected when the cursor was moved.
