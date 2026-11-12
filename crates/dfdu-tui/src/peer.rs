@@ -606,6 +606,32 @@ mod tests {
     }
 
     #[test]
+    fn discovered_hosts_footer_and_expiry() {
+        let mut background = Background::default();
+        let unbound = dfdu_peer::Status { role: dfdu_peer::Role::Unbound, peer: None };
+        let beacon = |host: &str, ids: &[&str]| dfdu_peer::Beacon {
+            host: host.into(), user: "slu".into(),
+            ids: ids.iter().map(|s| (*s).into()).collect(),
+            source: "127.0.0.1".parse().unwrap(),
+        };
+        assert_eq!(background.status_text("self", &unbound), "peer self unbound");
+        background.complete("self", &unbound, Ok(vec![beacon("own", &["self"]), beacon("nas", &["remote"])]));
+        assert_eq!(background.status_text("self", &unbound), "peer self unbound · ◆ nas found · B to connect");
+        background.complete("self", &unbound, Ok(vec![beacon("local", &["self", "other"])]));
+        assert_eq!(background.status_text("self", &unbound), "peer self unbound · ◆ 2 peers found · B to connect");
+        for role in [dfdu_peer::Role::Master, dfdu_peer::Role::Slave] {
+            let bound = dfdu_peer::Status { role, peer: Some("remote".into()) };
+            assert_eq!(background.status_text("self", &bound), status_text("self", &bound));
+        }
+        background.complete("self", &unbound, Ok(vec![]));
+        assert!(background.status_text("self", &unbound).contains("2 peers"));
+        background.complete("self", &unbound, Ok(vec![]));
+        assert!(background.status_text("self", &unbound).contains("local found"));
+        background.complete("self", &unbound, Ok(vec![]));
+        assert_eq!(background.status_text("self", &unbound), "peer self unbound");
+    }
+
+    #[test]
     fn roles_show_identity_and_partner() {
         for (role, name) in [
             (dfdu_peer::Role::Unbound, "unbound"),
