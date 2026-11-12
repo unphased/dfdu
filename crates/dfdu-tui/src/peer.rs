@@ -54,7 +54,7 @@ type DiscoveryResult = std::io::Result<Vec<dfdu_peer::Beacon>>;
 /// One discovery round at a time. Hosts expire after three unanswered rounds.
 #[derive(Debug, Default)]
 pub(crate) struct Background {
-    hosts: std::collections::BTreeMap<String, u8>,
+    hosts: std::collections::BTreeMap<String, (dfdu_peer::Beacon, u8)>,
     pending: Option<crossbeam_channel::Receiver<DiscoveryResult>>,
     next: Option<std::time::Instant>,
 }
@@ -100,15 +100,15 @@ impl Background {
             self.hosts.clear();
             return;
         }
-        for missed in self.hosts.values_mut() {
+        for (_, missed) in self.hosts.values_mut() {
             *missed += 1;
         }
         for beacon in result.unwrap_or_default() {
             if beacon.ids.iter().any(|other| other != id) {
-                self.hosts.insert(beacon.host, 0);
+                self.hosts.insert(beacon.host.clone(), (beacon, 0));
             }
         }
-        self.hosts.retain(|_, missed| *missed < 3);
+        self.hosts.retain(|_, (_, missed)| *missed < 3);
     }
 
     pub(crate) fn status_text(&self, id: &str, status: &dfdu_peer::Status) -> String {
@@ -142,6 +142,7 @@ pub(crate) struct Row {
     label: String,
     target: String,
     source_target: Option<String>,
+    instance_id: Option<String>,
 }
 
 fn instance_row(instance: dfdu_peer::Instance, host: Option<&str>) -> Row {
@@ -159,6 +160,7 @@ fn instance_row(instance: dfdu_peer::Instance, host: Option<&str>) -> Row {
         ),
         target: host.map_or_else(|| instance.id.clone(), |h| format!("{h} {}", instance.id)),
         source_target: None,
+        instance_id: None,
     }
 }
 
@@ -174,6 +176,7 @@ fn host_row(beacon: dfdu_peer::Beacon) -> Row {
         label: format!("{} ({})", target(&beacon.host), beacon.ids.join(", ")),
         target: target(&beacon.host),
         source_target: Some(target(&beacon.source.to_string())),
+        instance_id: (beacon.ids.len() == 1).then(|| beacon.ids[0].clone()),
     }
 }
 
@@ -259,7 +262,20 @@ pub(crate) fn open(app: &mut App) {
     };
     if options.peer.status().role == dfdu_peer::Role::Unbound {
         let mut panel = Panel {
-            rows: Vec::new(),
+            rows: app
+                .peer_background
+                .hosts
+                .values()
+                .filter(|(beacon, _)| !beacon.ids.iter().any(|id| id == options.peer.id()))
+                .map(|(beacon, _)| host_row(beacon.clone()))
+                .chain(
+                    dfdu_peer::list()
+                        .unwrap_or_default()
+                        .into_iter()
+                        .filter(|p| p.id != options.peer.id())
+                        .map(|p| instance_row(p, None)),
+                )
+                .collect(),
             selected: 0,
             pending: crossbeam_channel::never(),
             loading: false,
@@ -290,16 +306,25 @@ pub(crate) fn key(app: &mut App, k: KeyEvent) -> bool {
                 panel.selected = (panel.selected + 1).min(panel.rows.len().saturating_sub(1));
             }
             KeyCode::Up | KeyCode::Char('k') => panel.selected = panel.selected.saturating_sub(1),
-            KeyCode::Enter if !panel.loading => {
+            KeyCode::Enter => {
                 if let Some(row) = panel.rows.get(panel.selected) {
                     let target = row.target.clone();
                     if let Some(options) = &app.peer {
-                        if let Some(fallback) = row.source_target.clone() {
+                        if let Some(fallback) = row.source_target.clone()
+                            && row.instance_id.is_none()
+                        {
                             panel.load(
                                 options.peer.id().to_owned(),
                                 Some((target, options.remote_bin.clone(), fallback)),
                             );
                         } else {
+                            let target = if let Some(id) = &row.instance_id {
+                                let host =
+                                    resolve_target(target, row.source_target.clone().unwrap());
+                                format!("{host} {id}")
+                            } else {
+                                target
+                            };
                             if let Err(e) = options.peer.bind(&target, &options.remote_bin) {
                                 app.session.status = Some(format!("peer: {e}"));
                             }
@@ -556,6 +581,7 @@ mod tests {
                 label: "local roots unbound".into(),
                 target: slave.id().into(),
                 source_target: None,
+                instance_id: None,
             }]),
         );
         key(&mut app, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -644,9 +670,8 @@ while True:
         );
         let panel = app.peer_panel.as_ref().unwrap();
         assert_eq!(panel.selected, 0);
-        assert_eq!(
-            panel.rows.len(),
-            1,
+        assert!(
+            !panel.rows.is_empty(),
             "cached host must be visible before refresh completes"
         );
         assert!(panel.rows[0].label.contains("localhost"));

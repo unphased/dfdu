@@ -41,8 +41,10 @@ While unbound, the browser discovers hosts at startup and about every 10 seconds
 The footer shows `◆ HOST found · B to connect`, or a count when several hosts answer.
 Hosts disappear after three unanswered rounds. Binding stops these background probes
 and hides the notice; unbinding starts discovery again.
-Press `B` to open the peers panel. Select a local instance or a discovered host with
-Enter. Selecting a host fetches its instances through SSH; Enter then binds an instance.
+Press `B` to open the peers panel with discovered hosts already selected while it refreshes.
+Enter binds directly when the host advertises one instance. With several instances,
+Enter fetches the list through SSH; select an instance and press Enter again.
+Local instances bind without SSH. The browser where you press Enter becomes master.
 Press `r` to refresh or `m` for manual `ID`, `HOST ID` or `HOST:ID` entry.
 Press `B` again on either bound side to unbind; Escape closes the panel or prompt. The footer shows the local ID when unbound, or the role and
 partner's host/ID when bound. A second binder is refused. Connection errors appear in the
