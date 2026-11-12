@@ -21,7 +21,7 @@ Register-ArgumentCompleter -Native -CommandName 'dfdu' -ScriptBlock {
 
     $completions = @(switch ($command) {
         'dfdu' {
-            [CompletionResult]::new('--bind', '--bind', [CompletionResultType]::ParameterName, 'Bind to ID, ''HOST ID'' or HOST:ID at startup (implies --peer)')
+            [CompletionResult]::new('--bind', '--bind', [CompletionResultType]::ParameterName, 'Bind to ID, ''HOST ID'' or HOST:ID at startup')
             [CompletionResult]::new('--peer-remote-bin', '--peer-remote-bin', [CompletionResultType]::ParameterName, 'Remote dfdu executable for peer binding (expanded by the remote shell)')
             [CompletionResult]::new('--resume-from', '--resume-from', [CompletionResultType]::ParameterName, 'Open the scan saved in FILE (a snapshot or an ncdu export) at once, and rescan its directory in the background, replacing it when done. A snapshot is rescanned with the mount options it was taken with')
             [CompletionResult]::new('-f', '-f', [CompletionResultType]::ParameterName, 'Browse a scan saved in FILE (a snapshot, an ncdu JSON export, plain or zstd, or an ncdu binary export from `ncdu -O`; `-` for stdin), read-only')
@@ -38,7 +38,8 @@ Register-ArgumentCompleter -Native -CommandName 'dfdu' -ScriptBlock {
             [CompletionResult]::new('--network', '--network', [CompletionResultType]::ParameterName, 'Descend into network filesystems (NFS, SMB, sshfs and other FUSE network mounts); with or without --cross-mounts')
             [CompletionResult]::new('--mft', '--mft', [CompletionResultType]::ParameterName, 'Windows, as administrator: read each NTFS volume''s master file table instead of listing its directories, which is much faster on large volumes. Volumes whose table cannot be read are listed as usual')
             [CompletionResult]::new('--no-rules', '--no-rules', [CompletionResultType]::ParameterName, 'Do not classify entries: no categories, no cleanup candidates')
-            [CompletionResult]::new('--peer', '--peer', [CompletionResultType]::ParameterName, 'Enable peer mode with a private local socket (B binds or unbinds)')
+            [CompletionResult]::new('--peer', '--peer', [CompletionResultType]::ParameterName, 'Enable peer mode with a private local socket (the default; B binds or unbinds)')
+            [CompletionResult]::new('--no-peer', '--no-peer', [CompletionResultType]::ParameterName, 'Disable peer mode for the interactive browser')
             [CompletionResult]::new('--disks', '--disks', [CompletionResultType]::ParameterName, 'Choose a disk to browse from the mounted filesystems')
             [CompletionResult]::new('--read-only', '--read-only', [CompletionResultType]::ParameterName, 'Never delete anything: the browser leaves out its delete keys and runs cleanup commands only as dry runs')
             [CompletionResult]::new('--no-history', '--no-history', [CompletionResultType]::ParameterName, 'Do not record the scan in the history, nor show what grew since the last one')
@@ -72,11 +73,15 @@ Register-ArgumentCompleter -Native -CommandName 'dfdu' -ScriptBlock {
         'dfdu;peers' {
             [CompletionResult]::new('--discover', '--discover', [CompletionResultType]::ParameterName, 'Discover hosts over LAN and tailnet UDP')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Print instance metadata as JSON')
+            [CompletionResult]::new('--peer', '--peer', [CompletionResultType]::ParameterName, 'Enable peer mode with a private local socket (the default; B binds or unbinds)')
+            [CompletionResult]::new('--no-peer', '--no-peer', [CompletionResultType]::ParameterName, 'Disable peer mode for the interactive browser')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
         }
         'dfdu;peer-attach' {
+            [CompletionResult]::new('--peer', '--peer', [CompletionResultType]::ParameterName, 'Enable peer mode with a private local socket (the default; B binds or unbinds)')
+            [CompletionResult]::new('--no-peer', '--no-peer', [CompletionResultType]::ParameterName, 'Disable peer mode for the interactive browser')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -106,11 +111,15 @@ Register-ArgumentCompleter -Native -CommandName 'dfdu' -ScriptBlock {
             [CompletionResult]::new('--errors', '--errors', [CompletionResultType]::ParameterName, 'List every entry that could not be read, with the reason')
             [CompletionResult]::new('--no-history', '--no-history', [CompletionResultType]::ParameterName, 'Do not record the scan in the history (`dfdu diff`, `dfdu history`)')
             [CompletionResult]::new('--debug-stats', '--debug-stats', [CompletionResultType]::ParameterName, 'Print pipeline counters and applier timing (lock hold and wait) after the scan')
+            [CompletionResult]::new('--peer', '--peer', [CompletionResultType]::ParameterName, 'Enable peer mode with a private local socket (the default; B binds or unbinds)')
+            [CompletionResult]::new('--no-peer', '--no-peer', [CompletionResultType]::ParameterName, 'Disable peer mode for the interactive browser')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             break
         }
         'dfdu;disks' {
+            [CompletionResult]::new('--peer', '--peer', [CompletionResultType]::ParameterName, 'Enable peer mode with a private local socket (the default; B binds or unbinds)')
+            [CompletionResult]::new('--no-peer', '--no-peer', [CompletionResultType]::ParameterName, 'Disable peer mode for the interactive browser')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -128,6 +137,8 @@ Register-ArgumentCompleter -Native -CommandName 'dfdu' -ScriptBlock {
             [CompletionResult]::new('--cross-mounts', '--cross-mounts', [CompletionResultType]::ParameterName, 'Descend into other local filesystems (disks, tmpfs)')
             [CompletionResult]::new('--network', '--network', [CompletionResultType]::ParameterName, 'Descend into network filesystems (NFS, SMB, sshfs and other FUSE network mounts); with or without --cross-mounts')
             [CompletionResult]::new('--mft', '--mft', [CompletionResultType]::ParameterName, 'Windows, as administrator: read each NTFS volume''s master file table instead of listing its directories, which is much faster on large volumes. Volumes whose table cannot be read are listed as usual')
+            [CompletionResult]::new('--peer', '--peer', [CompletionResultType]::ParameterName, 'Enable peer mode with a private local socket (the default; B binds or unbinds)')
+            [CompletionResult]::new('--no-peer', '--no-peer', [CompletionResultType]::ParameterName, 'Disable peer mode for the interactive browser')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -150,6 +161,8 @@ Register-ArgumentCompleter -Native -CommandName 'dfdu' -ScriptBlock {
             [CompletionResult]::new('--cross-mounts', '--cross-mounts', [CompletionResultType]::ParameterName, 'Descend into other local filesystems (disks, tmpfs)')
             [CompletionResult]::new('--network', '--network', [CompletionResultType]::ParameterName, 'Descend into network filesystems (NFS, SMB, sshfs and other FUSE network mounts); with or without --cross-mounts')
             [CompletionResult]::new('--mft', '--mft', [CompletionResultType]::ParameterName, 'Windows, as administrator: read each NTFS volume''s master file table instead of listing its directories, which is much faster on large volumes. Volumes whose table cannot be read are listed as usual')
+            [CompletionResult]::new('--peer', '--peer', [CompletionResultType]::ParameterName, 'Enable peer mode with a private local socket (the default; B binds or unbinds)')
+            [CompletionResult]::new('--no-peer', '--no-peer', [CompletionResultType]::ParameterName, 'Disable peer mode for the interactive browser')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -166,11 +179,15 @@ Register-ArgumentCompleter -Native -CommandName 'dfdu' -ScriptBlock {
             [CompletionResult]::new('--cross-mounts', '--cross-mounts', [CompletionResultType]::ParameterName, 'Descend into other local filesystems (disks, tmpfs)')
             [CompletionResult]::new('--network', '--network', [CompletionResultType]::ParameterName, 'Descend into network filesystems (NFS, SMB, sshfs and other FUSE network mounts); with or without --cross-mounts')
             [CompletionResult]::new('--mft', '--mft', [CompletionResultType]::ParameterName, 'Windows, as administrator: read each NTFS volume''s master file table instead of listing its directories, which is much faster on large volumes. Volumes whose table cannot be read are listed as usual')
+            [CompletionResult]::new('--peer', '--peer', [CompletionResultType]::ParameterName, 'Enable peer mode with a private local socket (the default; B binds or unbinds)')
+            [CompletionResult]::new('--no-peer', '--no-peer', [CompletionResultType]::ParameterName, 'Disable peer mode for the interactive browser')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
         }
         'dfdu;history' {
+            [CompletionResult]::new('--peer', '--peer', [CompletionResultType]::ParameterName, 'Enable peer mode with a private local socket (the default; B binds or unbinds)')
+            [CompletionResult]::new('--no-peer', '--no-peer', [CompletionResultType]::ParameterName, 'Disable peer mode for the interactive browser')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -185,6 +202,8 @@ Register-ArgumentCompleter -Native -CommandName 'dfdu' -ScriptBlock {
             [CompletionResult]::new('--cross-mounts', '--cross-mounts', [CompletionResultType]::ParameterName, 'Descend into other local filesystems (disks, tmpfs)')
             [CompletionResult]::new('--network', '--network', [CompletionResultType]::ParameterName, 'Descend into network filesystems (NFS, SMB, sshfs and other FUSE network mounts); with or without --cross-mounts')
             [CompletionResult]::new('--mft', '--mft', [CompletionResultType]::ParameterName, 'Windows, as administrator: read each NTFS volume''s master file table instead of listing its directories, which is much faster on large volumes. Volumes whose table cannot be read are listed as usual')
+            [CompletionResult]::new('--peer', '--peer', [CompletionResultType]::ParameterName, 'Enable peer mode with a private local socket (the default; B binds or unbinds)')
+            [CompletionResult]::new('--no-peer', '--no-peer', [CompletionResultType]::ParameterName, 'Disable peer mode for the interactive browser')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -203,6 +222,8 @@ Register-ArgumentCompleter -Native -CommandName 'dfdu' -ScriptBlock {
             [CompletionResult]::new('--cross-mounts', '--cross-mounts', [CompletionResultType]::ParameterName, 'Descend into other local filesystems (disks, tmpfs)')
             [CompletionResult]::new('--network', '--network', [CompletionResultType]::ParameterName, 'Descend into network filesystems (NFS, SMB, sshfs and other FUSE network mounts); with or without --cross-mounts')
             [CompletionResult]::new('--mft', '--mft', [CompletionResultType]::ParameterName, 'Windows, as administrator: read each NTFS volume''s master file table instead of listing its directories, which is much faster on large volumes. Volumes whose table cannot be read are listed as usual')
+            [CompletionResult]::new('--peer', '--peer', [CompletionResultType]::ParameterName, 'Enable peer mode with a private local socket (the default; B binds or unbinds)')
+            [CompletionResult]::new('--no-peer', '--no-peer', [CompletionResultType]::ParameterName, 'Disable peer mode for the interactive browser')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             break
@@ -214,6 +235,8 @@ Register-ArgumentCompleter -Native -CommandName 'dfdu' -ScriptBlock {
             [CompletionResult]::new('--apparent', '--apparent', [CompletionResultType]::ParameterName, 'Show apparent sizes instead of disk usage')
             [CompletionResult]::new('--by-type', '--by-type', [CompletionResultType]::ParameterName, 'After the tree, print disk usage by file type and the largest extensions')
             [CompletionResult]::new('--bytes', '--bytes', [CompletionResultType]::ParameterName, 'Print only the root total in bytes')
+            [CompletionResult]::new('--peer', '--peer', [CompletionResultType]::ParameterName, 'Enable peer mode with a private local socket (the default; B binds or unbinds)')
+            [CompletionResult]::new('--no-peer', '--no-peer', [CompletionResultType]::ParameterName, 'Disable peer mode for the interactive browser')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -224,11 +247,15 @@ Register-ArgumentCompleter -Native -CommandName 'dfdu' -ScriptBlock {
             [CompletionResult]::new('--dismiss', '--dismiss', [CompletionResultType]::ParameterName, 'Close these interrupted items: nothing is done on disk')
             [CompletionResult]::new('--journals', '--journals', [CompletionResultType]::ParameterName, 'The journal directory (the default is dfdu''s state directory)')
             [CompletionResult]::new('--yes', '--yes', [CompletionResultType]::ParameterName, 'Finish and restore. Without it nothing is changed: what would be done is printed')
+            [CompletionResult]::new('--peer', '--peer', [CompletionResultType]::ParameterName, 'Enable peer mode with a private local socket (the default; B binds or unbinds)')
+            [CompletionResult]::new('--no-peer', '--no-peer', [CompletionResultType]::ParameterName, 'Disable peer mode for the interactive browser')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
         }
         'dfdu;cache' {
+            [CompletionResult]::new('--peer', '--peer', [CompletionResultType]::ParameterName, 'Enable peer mode with a private local socket (the default; B binds or unbinds)')
+            [CompletionResult]::new('--no-peer', '--no-peer', [CompletionResultType]::ParameterName, 'Disable peer mode for the interactive browser')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('list', 'list', [CompletionResultType]::ParameterValue, 'List the cached scans, newest first: when each was written, its size, its entries and its directory, and where the cache is')
@@ -237,11 +264,15 @@ Register-ArgumentCompleter -Native -CommandName 'dfdu' -ScriptBlock {
             break
         }
         'dfdu;cache;list' {
+            [CompletionResult]::new('--peer', '--peer', [CompletionResultType]::ParameterName, 'Enable peer mode with a private local socket (the default; B binds or unbinds)')
+            [CompletionResult]::new('--no-peer', '--no-peer', [CompletionResultType]::ParameterName, 'Disable peer mode for the interactive browser')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
         }
         'dfdu;cache;clear' {
+            [CompletionResult]::new('--peer', '--peer', [CompletionResultType]::ParameterName, 'Enable peer mode with a private local socket (the default; B binds or unbinds)')
+            [CompletionResult]::new('--no-peer', '--no-peer', [CompletionResultType]::ParameterName, 'Disable peer mode for the interactive browser')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -262,6 +293,8 @@ Register-ArgumentCompleter -Native -CommandName 'dfdu' -ScriptBlock {
             break
         }
         'dfdu;man' {
+            [CompletionResult]::new('--peer', '--peer', [CompletionResultType]::ParameterName, 'Enable peer mode with a private local socket (the default; B binds or unbinds)')
+            [CompletionResult]::new('--no-peer', '--no-peer', [CompletionResultType]::ParameterName, 'Disable peer mode for the interactive browser')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -269,11 +302,15 @@ Register-ArgumentCompleter -Native -CommandName 'dfdu' -ScriptBlock {
         'dfdu;update' {
             [CompletionResult]::new('--check', '--check', [CompletionResultType]::ParameterName, 'Only check whether a newer release is out; change nothing')
             [CompletionResult]::new('--force', '--force', [CompletionResultType]::ParameterName, 'Install the latest release even when this build is as new (to repair a copy)')
+            [CompletionResult]::new('--peer', '--peer', [CompletionResultType]::ParameterName, 'Enable peer mode with a private local socket (the default; B binds or unbinds)')
+            [CompletionResult]::new('--no-peer', '--no-peer', [CompletionResultType]::ParameterName, 'Disable peer mode for the interactive browser')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
         }
         'dfdu;completions' {
+            [CompletionResult]::new('--peer', '--peer', [CompletionResultType]::ParameterName, 'Enable peer mode with a private local socket (the default; B binds or unbinds)')
+            [CompletionResult]::new('--no-peer', '--no-peer', [CompletionResultType]::ParameterName, 'Disable peer mode for the interactive browser')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -281,6 +318,8 @@ Register-ArgumentCompleter -Native -CommandName 'dfdu' -ScriptBlock {
         'dfdu;agent' {
             [CompletionResult]::new('--threads', '--threads', [CompletionResultType]::ParameterName, 'Worker threads')
             [CompletionResult]::new('--protocols', '--protocols', [CompletionResultType]::ParameterName, 'Print the protocol versions this agent speaks (`MIN MAX`) and exit')
+            [CompletionResult]::new('--peer', '--peer', [CompletionResultType]::ParameterName, 'Enable peer mode with a private local socket (the default; B binds or unbinds)')
+            [CompletionResult]::new('--no-peer', '--no-peer', [CompletionResultType]::ParameterName, 'Disable peer mode for the interactive browser')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break

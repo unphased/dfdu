@@ -72,10 +72,6 @@ const EXIT_CODES: &str = "Exit codes:
     version,
     about,
     args_conflicts_with_subcommands = true,
-    group(clap::ArgGroup::new("peer_mode")
-        .args(["peer", "bind"])
-        .multiple(true)
-        .conflicts_with_all(["remote", "import", "resume_from", "disks"])),
     after_long_help = EXIT_CODES
 )]
 #[expect(
@@ -92,17 +88,17 @@ struct Cli {
     mounts: MountArgs,
     #[command(flatten)]
     rules: RuleArgs,
-    /// Enable peer mode with a private local socket (B binds or unbinds).
-    #[arg(
-        long,
-        default_value_if("bind", clap::builder::ArgPredicate::IsPresent, "true")
-    )]
+    /// Enable peer mode with a private local socket (the default; B binds or unbinds).
+    #[arg(long, global = true, default_value_t = true, action = clap::ArgAction::SetTrue)]
     peer: bool,
-    /// Bind to ID, 'HOST ID' or HOST:ID at startup (implies --peer).
-    #[arg(long, value_name = "TARGET")]
+    /// Disable peer mode for the interactive browser.
+    #[arg(long, global = true, conflicts_with = "peer")]
+    no_peer: bool,
+    /// Bind to ID, 'HOST ID' or HOST:ID at startup.
+    #[arg(long, value_name = "TARGET", conflicts_with_all = ["no_peer", "remote", "import", "resume_from", "disks"])]
     bind: Option<String>,
     /// Remote dfdu executable for peer binding (expanded by the remote shell).
-    #[arg(long, default_value = "~/.local/bin/dfdu", requires = "peer_mode")]
+    #[arg(long, default_value = "~/.local/bin/dfdu")]
     peer_remote_bin: String,
     /// Choose a disk to browse from the mounted filesystems.
     #[arg(long, conflicts_with = "paths")]
@@ -426,8 +422,8 @@ fn run(cli: Cli) -> Result<ExitCode, ExitCode> {
         eprintln!("dfdu: {message}");
         return Err(ExitCode::from(2));
     }
-    if cli.peer && (cli.cmd.is_some() || !std::io::stdout().is_terminal()) {
-        eprintln!("dfdu: --peer requires the interactive browser on a terminal");
+    if cli.bind.is_some() && (cli.cmd.is_some() || !std::io::stdout().is_terminal()) {
+        eprintln!("dfdu: --bind requires the interactive browser on a terminal");
         return Err(ExitCode::from(2));
     }
     let rules = || RuleArgs::default().load().ok_or(ExitCode::from(1));
@@ -535,6 +531,10 @@ mod tests {
     fn bind_implies_peer_mode() {
         assert!(Cli::try_parse_from(["dfdu", "/x"]).unwrap().peer);
         assert!(Cli::try_parse_from(["dfdu", "--no-peer", "/x"]).is_ok());
+        for flag in ["--peer", "--no-peer"] {
+            assert!(Cli::try_parse_from(["dfdu", flag, "scan", "/x"]).is_ok());
+            assert!(Cli::try_parse_from(["dfdu", flag, "--remote", "host"]).is_ok());
+        }
         assert!(Cli::try_parse_from(["dfdu", "--peer-remote-bin", "/bin/dfdu"]).is_ok());
         for args in [
             vec!["dfdu", "--bind", "abc123", "/x"],

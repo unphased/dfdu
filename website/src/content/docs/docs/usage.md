@@ -34,14 +34,16 @@ Unreadable entries are marked `!` with the reason. Press `!` to list them all.
 
 ## Peer mode (Unix)
 
-Start two independent browsers with `dfdu --peer PATH`. Each gets a short random ID.
+Start two independent browsers with `dfdu PATH`. Peer mode is on by default for local
+interactive browsers on a terminal. Use `--no-peer` to opt out; `--peer` remains accepted.
+Subcommands and piped output do not start peer mode. Each browser gets a short random ID.
 Press `B` to open the peers panel. Select a local instance or a discovered host with
 Enter. Selecting a host fetches its instances through SSH; Enter then binds an instance.
 Press `r` to refresh or `m` for manual `ID`, `HOST ID` or `HOST:ID` entry.
 Press `B` again on either bound side to unbind; Escape closes the panel or prompt. The footer shows the local ID when unbound, or the role and
 partner's host/ID when bound. A second binder is refused. Connection errors appear in the
 status line. Browsing remains independent: navigation sync and role swapping
-are not implemented yet. `--bind TARGET` binds at startup and implies `--peer`.
+are not implemented yet. `--bind TARGET` binds at startup.
 
 ```sh
 dfdu peers                    # list live instances on this host
@@ -49,7 +51,7 @@ dfdu peers --json             # metadata for scripts
 dfdu peers --discover         # LAN and online tailnet hosts
 dfdu --bind ab12cd34 /backup
 dfdu --bind 'nas ab12cd34' /source
-dfdu --peer --peer-remote-bin /opt/bin/dfdu /source
+dfdu --peer-remote-bin /opt/bin/dfdu /source
 make install                  # copy the release binary to ~/.local/bin/dfdu
 ```
 

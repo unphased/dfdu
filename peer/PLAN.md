@@ -147,8 +147,9 @@ Each phase starts with failing tests in their own commit, then green commits at 
 
 1. **Base + image preview.** Carry over the match index and multiple roots. Split jpg-preview
    into a library. Kitty placement next to image rows.
-2. **Peer mode and transport (complete).** `--peer [PATH]...` registers an eight-hex-digit
-   random ID. `dfdu peers [--json]` lists live instances; `dfdu peer-attach ID` bridges stdio.
+2. **Peer mode and transport (complete).** `dfdu [PATH]...` registers an eight-hex-digit
+   random ID by default in the local interactive browser on a terminal. `--no-peer` opts out;
+   `--peer` is accepted for compatibility. Subcommands and piped output do not register. `dfdu peers [--json]` lists live instances; `dfdu peer-attach ID` bridges stdio.
    `--bind TARGET` or `B` binds to `ID`, `HOST ID` or `HOST:ID`; `B` unbinds either side.
    The footer shows role and partner. No navigation, discovery or swap yet.
    NDJSON frames are `{"hello":{"proto":1,"id":"...","host":"...","role":"master"}}`,

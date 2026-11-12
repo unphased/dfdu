@@ -18,7 +18,7 @@ set edit:completion:arg-completer[dfdu] = {|@words|
     }
     var completions = [
         &'dfdu'= {
-            cand --bind 'Bind to ID, ''HOST ID'' or HOST:ID at startup (implies --peer)'
+            cand --bind 'Bind to ID, ''HOST ID'' or HOST:ID at startup'
             cand --peer-remote-bin 'Remote dfdu executable for peer binding (expanded by the remote shell)'
             cand --resume-from 'Open the scan saved in FILE (a snapshot or an ncdu export) at once, and rescan its directory in the background, replacing it when done. A snapshot is rescanned with the mount options it was taken with'
             cand -f 'Browse a scan saved in FILE (a snapshot, an ncdu JSON export, plain or zstd, or an ncdu binary export from `ncdu -O`; `-` for stdin), read-only'
@@ -35,7 +35,8 @@ set edit:completion:arg-completer[dfdu] = {|@words|
             cand --network 'Descend into network filesystems (NFS, SMB, sshfs and other FUSE network mounts); with or without --cross-mounts'
             cand --mft 'Windows, as administrator: read each NTFS volume''s master file table instead of listing its directories, which is much faster on large volumes. Volumes whose table cannot be read are listed as usual'
             cand --no-rules 'Do not classify entries: no categories, no cleanup candidates'
-            cand --peer 'Enable peer mode with a private local socket (B binds or unbinds)'
+            cand --peer 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+            cand --no-peer 'Disable peer mode for the interactive browser'
             cand --disks 'Choose a disk to browse from the mounted filesystems'
             cand --read-only 'Never delete anything: the browser leaves out its delete keys and runs cleanup commands only as dry runs'
             cand --no-history 'Do not record the scan in the history, nor show what grew since the last one'
@@ -68,10 +69,14 @@ set edit:completion:arg-completer[dfdu] = {|@words|
         &'dfdu;peers'= {
             cand --discover 'Discover hosts over LAN and tailnet UDP'
             cand --json 'Print instance metadata as JSON'
+            cand --peer 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+            cand --no-peer 'Disable peer mode for the interactive browser'
             cand -h 'Print help'
             cand --help 'Print help'
         }
         &'dfdu;peer-attach'= {
+            cand --peer 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+            cand --no-peer 'Disable peer mode for the interactive browser'
             cand -h 'Print help'
             cand --help 'Print help'
         }
@@ -100,10 +105,14 @@ set edit:completion:arg-completer[dfdu] = {|@words|
             cand --errors 'List every entry that could not be read, with the reason'
             cand --no-history 'Do not record the scan in the history (`dfdu diff`, `dfdu history`)'
             cand --debug-stats 'Print pipeline counters and applier timing (lock hold and wait) after the scan'
+            cand --peer 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+            cand --no-peer 'Disable peer mode for the interactive browser'
             cand -h 'Print help (see more with ''--help'')'
             cand --help 'Print help (see more with ''--help'')'
         }
         &'dfdu;disks'= {
+            cand --peer 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+            cand --no-peer 'Disable peer mode for the interactive browser'
             cand -h 'Print help'
             cand --help 'Print help'
         }
@@ -120,6 +129,8 @@ set edit:completion:arg-completer[dfdu] = {|@words|
             cand --cross-mounts 'Descend into other local filesystems (disks, tmpfs)'
             cand --network 'Descend into network filesystems (NFS, SMB, sshfs and other FUSE network mounts); with or without --cross-mounts'
             cand --mft 'Windows, as administrator: read each NTFS volume''s master file table instead of listing its directories, which is much faster on large volumes. Volumes whose table cannot be read are listed as usual'
+            cand --peer 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+            cand --no-peer 'Disable peer mode for the interactive browser'
             cand -h 'Print help'
             cand --help 'Print help'
         }
@@ -141,6 +152,8 @@ set edit:completion:arg-completer[dfdu] = {|@words|
             cand --cross-mounts 'Descend into other local filesystems (disks, tmpfs)'
             cand --network 'Descend into network filesystems (NFS, SMB, sshfs and other FUSE network mounts); with or without --cross-mounts'
             cand --mft 'Windows, as administrator: read each NTFS volume''s master file table instead of listing its directories, which is much faster on large volumes. Volumes whose table cannot be read are listed as usual'
+            cand --peer 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+            cand --no-peer 'Disable peer mode for the interactive browser'
             cand -h 'Print help'
             cand --help 'Print help'
         }
@@ -156,10 +169,14 @@ set edit:completion:arg-completer[dfdu] = {|@words|
             cand --cross-mounts 'Descend into other local filesystems (disks, tmpfs)'
             cand --network 'Descend into network filesystems (NFS, SMB, sshfs and other FUSE network mounts); with or without --cross-mounts'
             cand --mft 'Windows, as administrator: read each NTFS volume''s master file table instead of listing its directories, which is much faster on large volumes. Volumes whose table cannot be read are listed as usual'
+            cand --peer 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+            cand --no-peer 'Disable peer mode for the interactive browser'
             cand -h 'Print help'
             cand --help 'Print help'
         }
         &'dfdu;history'= {
+            cand --peer 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+            cand --no-peer 'Disable peer mode for the interactive browser'
             cand -h 'Print help'
             cand --help 'Print help'
         }
@@ -173,6 +190,8 @@ set edit:completion:arg-completer[dfdu] = {|@words|
             cand --cross-mounts 'Descend into other local filesystems (disks, tmpfs)'
             cand --network 'Descend into network filesystems (NFS, SMB, sshfs and other FUSE network mounts); with or without --cross-mounts'
             cand --mft 'Windows, as administrator: read each NTFS volume''s master file table instead of listing its directories, which is much faster on large volumes. Volumes whose table cannot be read are listed as usual'
+            cand --peer 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+            cand --no-peer 'Disable peer mode for the interactive browser'
             cand -h 'Print help'
             cand --help 'Print help'
         }
@@ -190,6 +209,8 @@ set edit:completion:arg-completer[dfdu] = {|@words|
             cand --cross-mounts 'Descend into other local filesystems (disks, tmpfs)'
             cand --network 'Descend into network filesystems (NFS, SMB, sshfs and other FUSE network mounts); with or without --cross-mounts'
             cand --mft 'Windows, as administrator: read each NTFS volume''s master file table instead of listing its directories, which is much faster on large volumes. Volumes whose table cannot be read are listed as usual'
+            cand --peer 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+            cand --no-peer 'Disable peer mode for the interactive browser'
             cand -h 'Print help (see more with ''--help'')'
             cand --help 'Print help (see more with ''--help'')'
         }
@@ -200,6 +221,8 @@ set edit:completion:arg-completer[dfdu] = {|@words|
             cand --apparent 'Show apparent sizes instead of disk usage'
             cand --by-type 'After the tree, print disk usage by file type and the largest extensions'
             cand --bytes 'Print only the root total in bytes'
+            cand --peer 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+            cand --no-peer 'Disable peer mode for the interactive browser'
             cand -h 'Print help'
             cand --help 'Print help'
         }
@@ -209,10 +232,14 @@ set edit:completion:arg-completer[dfdu] = {|@words|
             cand --dismiss 'Close these interrupted items: nothing is done on disk'
             cand --journals 'The journal directory (the default is dfdu''s state directory)'
             cand --yes 'Finish and restore. Without it nothing is changed: what would be done is printed'
+            cand --peer 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+            cand --no-peer 'Disable peer mode for the interactive browser'
             cand -h 'Print help'
             cand --help 'Print help'
         }
         &'dfdu;cache'= {
+            cand --peer 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+            cand --no-peer 'Disable peer mode for the interactive browser'
             cand -h 'Print help'
             cand --help 'Print help'
             cand list 'List the cached scans, newest first: when each was written, its size, its entries and its directory, and where the cache is'
@@ -220,10 +247,14 @@ set edit:completion:arg-completer[dfdu] = {|@words|
             cand help 'Print this message or the help of the given subcommand(s)'
         }
         &'dfdu;cache;list'= {
+            cand --peer 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+            cand --no-peer 'Disable peer mode for the interactive browser'
             cand -h 'Print help'
             cand --help 'Print help'
         }
         &'dfdu;cache;clear'= {
+            cand --peer 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+            cand --no-peer 'Disable peer mode for the interactive browser'
             cand -h 'Print help'
             cand --help 'Print help'
         }
@@ -239,22 +270,30 @@ set edit:completion:arg-completer[dfdu] = {|@words|
         &'dfdu;cache;help;help'= {
         }
         &'dfdu;man'= {
+            cand --peer 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+            cand --no-peer 'Disable peer mode for the interactive browser'
             cand -h 'Print help'
             cand --help 'Print help'
         }
         &'dfdu;update'= {
             cand --check 'Only check whether a newer release is out; change nothing'
             cand --force 'Install the latest release even when this build is as new (to repair a copy)'
+            cand --peer 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+            cand --no-peer 'Disable peer mode for the interactive browser'
             cand -h 'Print help'
             cand --help 'Print help'
         }
         &'dfdu;completions'= {
+            cand --peer 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+            cand --no-peer 'Disable peer mode for the interactive browser'
             cand -h 'Print help'
             cand --help 'Print help'
         }
         &'dfdu;agent'= {
             cand --threads 'Worker threads'
             cand --protocols 'Print the protocol versions this agent speaks (`MIN MAX`) and exit'
+            cand --peer 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+            cand --no-peer 'Disable peer mode for the interactive browser'
             cand -h 'Print help'
             cand --help 'Print help'
         }

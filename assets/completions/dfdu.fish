@@ -1,6 +1,6 @@
 # Print an optspec for argparse to handle cmd's options that are independent of any subcommand.
 function __fish_dfdu_global_optspecs
-    string join \n x/one-file-system cross-mounts network mft no-rules peer bind= peer-remote-bin= disks resume-from= f/file= read-only remote= remote-agent= type= no-history no-cache theme= color= bars= no-mouse debug-stats h/help V/version
+    string join \n x/one-file-system cross-mounts network mft no-rules peer no-peer bind= peer-remote-bin= disks resume-from= f/file= read-only remote= remote-agent= type= no-history no-cache theme= color= bars= no-mouse debug-stats h/help V/version
 end
 
 function __fish_dfdu_needs_command
@@ -24,7 +24,7 @@ function __fish_dfdu_using_subcommand
     contains -- $cmd[1] $argv
 end
 
-complete -c dfdu -n "__fish_dfdu_needs_command" -l bind -d 'Bind to ID, \'HOST ID\' or HOST:ID at startup (implies --peer)' -r
+complete -c dfdu -n "__fish_dfdu_needs_command" -l bind -d 'Bind to ID, \'HOST ID\' or HOST:ID at startup' -r
 complete -c dfdu -n "__fish_dfdu_needs_command" -l peer-remote-bin -d 'Remote dfdu executable for peer binding (expanded by the remote shell)' -r
 complete -c dfdu -n "__fish_dfdu_needs_command" -l resume-from -d 'Open the scan saved in FILE (a snapshot or an ncdu export) at once, and rescan its directory in the background, replacing it when done. A snapshot is rescanned with the mount options it was taken with' -r -F
 complete -c dfdu -n "__fish_dfdu_needs_command" -s f -l file -d 'Browse a scan saved in FILE (a snapshot, an ncdu JSON export, plain or zstd, or an ncdu binary export from `ncdu -O`; `-` for stdin), read-only' -r -F
@@ -41,7 +41,8 @@ complete -c dfdu -n "__fish_dfdu_needs_command" -l cross-mounts -d 'Descend into
 complete -c dfdu -n "__fish_dfdu_needs_command" -l network -d 'Descend into network filesystems (NFS, SMB, sshfs and other FUSE network mounts); with or without --cross-mounts'
 complete -c dfdu -n "__fish_dfdu_needs_command" -l mft -d 'Windows, as administrator: read each NTFS volume\'s master file table instead of listing its directories, which is much faster on large volumes. Volumes whose table cannot be read are listed as usual'
 complete -c dfdu -n "__fish_dfdu_needs_command" -l no-rules -d 'Do not classify entries: no categories, no cleanup candidates'
-complete -c dfdu -n "__fish_dfdu_needs_command" -l peer -d 'Enable peer mode with a private local socket (B binds or unbinds)'
+complete -c dfdu -n "__fish_dfdu_needs_command" -l peer -d 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+complete -c dfdu -n "__fish_dfdu_needs_command" -l no-peer -d 'Disable peer mode for the interactive browser'
 complete -c dfdu -n "__fish_dfdu_needs_command" -l disks -d 'Choose a disk to browse from the mounted filesystems'
 complete -c dfdu -n "__fish_dfdu_needs_command" -l read-only -d 'Never delete anything: the browser leaves out its delete keys and runs cleanup commands only as dry runs'
 complete -c dfdu -n "__fish_dfdu_needs_command" -l no-history -d 'Do not record the scan in the history, nor show what grew since the last one'
@@ -70,7 +71,11 @@ complete -c dfdu -n "__fish_dfdu_needs_command" -a "agent" -d 'Scan for a dfdu o
 complete -c dfdu -n "__fish_dfdu_needs_command" -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c dfdu -n "__fish_dfdu_using_subcommand peers" -l discover -d 'Discover hosts over LAN and tailnet UDP'
 complete -c dfdu -n "__fish_dfdu_using_subcommand peers" -l json -d 'Print instance metadata as JSON'
+complete -c dfdu -n "__fish_dfdu_using_subcommand peers" -l peer -d 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+complete -c dfdu -n "__fish_dfdu_using_subcommand peers" -l no-peer -d 'Disable peer mode for the interactive browser'
 complete -c dfdu -n "__fish_dfdu_using_subcommand peers" -s h -l help -d 'Print help'
+complete -c dfdu -n "__fish_dfdu_using_subcommand peer-attach" -l peer -d 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+complete -c dfdu -n "__fish_dfdu_using_subcommand peer-attach" -l no-peer -d 'Disable peer mode for the interactive browser'
 complete -c dfdu -n "__fish_dfdu_using_subcommand peer-attach" -s h -l help -d 'Print help'
 complete -c dfdu -n "__fish_dfdu_using_subcommand scan" -l format -d 'Output: table (for people), json (one document, schema/scan.v1.json), ndjson (one record per line, for large trees) or ncdu (ncdu\'s JSON export)' -r -f -a "table\t''
 json\t''
@@ -101,7 +106,11 @@ complete -c dfdu -n "__fish_dfdu_using_subcommand scan" -l bytes -d 'Print only 
 complete -c dfdu -n "__fish_dfdu_using_subcommand scan" -l errors -d 'List every entry that could not be read, with the reason'
 complete -c dfdu -n "__fish_dfdu_using_subcommand scan" -l no-history -d 'Do not record the scan in the history (`dfdu diff`, `dfdu history`)'
 complete -c dfdu -n "__fish_dfdu_using_subcommand scan" -l debug-stats -d 'Print pipeline counters and applier timing (lock hold and wait) after the scan'
+complete -c dfdu -n "__fish_dfdu_using_subcommand scan" -l peer -d 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+complete -c dfdu -n "__fish_dfdu_using_subcommand scan" -l no-peer -d 'Disable peer mode for the interactive browser'
 complete -c dfdu -n "__fish_dfdu_using_subcommand scan" -s h -l help -d 'Print help (see more with \'--help\')'
+complete -c dfdu -n "__fish_dfdu_using_subcommand disks" -l peer -d 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+complete -c dfdu -n "__fish_dfdu_using_subcommand disks" -l no-peer -d 'Disable peer mode for the interactive browser'
 complete -c dfdu -n "__fish_dfdu_using_subcommand disks" -s h -l help -d 'Print help'
 complete -c dfdu -n "__fish_dfdu_using_subcommand report" -l min-size -d 'Only matches at least this big (`100M`, `1.5GiB`, `500 KB`)' -r
 complete -c dfdu -n "__fish_dfdu_using_subcommand report" -l category -d 'Only these categories (comma separated): an id such as `dev.build`, or its first part (`dev`) for all of them' -r
@@ -115,6 +124,8 @@ complete -c dfdu -n "__fish_dfdu_using_subcommand report" -s x -l one-file-syste
 complete -c dfdu -n "__fish_dfdu_using_subcommand report" -l cross-mounts -d 'Descend into other local filesystems (disks, tmpfs)'
 complete -c dfdu -n "__fish_dfdu_using_subcommand report" -l network -d 'Descend into network filesystems (NFS, SMB, sshfs and other FUSE network mounts); with or without --cross-mounts'
 complete -c dfdu -n "__fish_dfdu_using_subcommand report" -l mft -d 'Windows, as administrator: read each NTFS volume\'s master file table instead of listing its directories, which is much faster on large volumes. Volumes whose table cannot be read are listed as usual'
+complete -c dfdu -n "__fish_dfdu_using_subcommand report" -l peer -d 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+complete -c dfdu -n "__fish_dfdu_using_subcommand report" -l no-peer -d 'Disable peer mode for the interactive browser'
 complete -c dfdu -n "__fish_dfdu_using_subcommand report" -s h -l help -d 'Print help'
 complete -c dfdu -n "__fish_dfdu_using_subcommand clean" -l min-size -d 'Only matches at least this big (`100M`, `1.5GiB`, `500 KB`)' -r
 complete -c dfdu -n "__fish_dfdu_using_subcommand clean" -l category -d 'Only these categories (comma separated): an id such as `dev.build`, or its first part (`dev`) for all of them' -r
@@ -135,6 +146,8 @@ complete -c dfdu -n "__fish_dfdu_using_subcommand clean" -s x -l one-file-system
 complete -c dfdu -n "__fish_dfdu_using_subcommand clean" -l cross-mounts -d 'Descend into other local filesystems (disks, tmpfs)'
 complete -c dfdu -n "__fish_dfdu_using_subcommand clean" -l network -d 'Descend into network filesystems (NFS, SMB, sshfs and other FUSE network mounts); with or without --cross-mounts'
 complete -c dfdu -n "__fish_dfdu_using_subcommand clean" -l mft -d 'Windows, as administrator: read each NTFS volume\'s master file table instead of listing its directories, which is much faster on large volumes. Volumes whose table cannot be read are listed as usual'
+complete -c dfdu -n "__fish_dfdu_using_subcommand clean" -l peer -d 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+complete -c dfdu -n "__fish_dfdu_using_subcommand clean" -l no-peer -d 'Disable peer mode for the interactive browser'
 complete -c dfdu -n "__fish_dfdu_using_subcommand clean" -s h -l help -d 'Print help'
 complete -c dfdu -n "__fish_dfdu_using_subcommand diff" -l since -d 'Compare with the recorded scan closest to this long ago (`7d`, `2w`, `12h`) instead of the last one' -r
 complete -c dfdu -n "__fish_dfdu_using_subcommand diff" -l depth -d 'Levels below the root to list' -r
@@ -147,7 +160,11 @@ complete -c dfdu -n "__fish_dfdu_using_subcommand diff" -s x -l one-file-system 
 complete -c dfdu -n "__fish_dfdu_using_subcommand diff" -l cross-mounts -d 'Descend into other local filesystems (disks, tmpfs)'
 complete -c dfdu -n "__fish_dfdu_using_subcommand diff" -l network -d 'Descend into network filesystems (NFS, SMB, sshfs and other FUSE network mounts); with or without --cross-mounts'
 complete -c dfdu -n "__fish_dfdu_using_subcommand diff" -l mft -d 'Windows, as administrator: read each NTFS volume\'s master file table instead of listing its directories, which is much faster on large volumes. Volumes whose table cannot be read are listed as usual'
+complete -c dfdu -n "__fish_dfdu_using_subcommand diff" -l peer -d 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+complete -c dfdu -n "__fish_dfdu_using_subcommand diff" -l no-peer -d 'Disable peer mode for the interactive browser'
 complete -c dfdu -n "__fish_dfdu_using_subcommand diff" -s h -l help -d 'Print help'
+complete -c dfdu -n "__fish_dfdu_using_subcommand history" -l peer -d 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+complete -c dfdu -n "__fish_dfdu_using_subcommand history" -l no-peer -d 'Disable peer mode for the interactive browser'
 complete -c dfdu -n "__fish_dfdu_using_subcommand history" -s h -l help -d 'Print help'
 complete -c dfdu -n "__fish_dfdu_using_subcommand dupes" -l min-size -d 'Compare only files of at least this size (`1MiB`, `100KB`)' -r
 complete -c dfdu -n "__fish_dfdu_using_subcommand dupes" -l format -d 'Output: table or json (schema/dupes.v1.json)' -r -f -a "table\t''
@@ -158,6 +175,8 @@ complete -c dfdu -n "__fish_dfdu_using_subcommand dupes" -s x -l one-file-system
 complete -c dfdu -n "__fish_dfdu_using_subcommand dupes" -l cross-mounts -d 'Descend into other local filesystems (disks, tmpfs)'
 complete -c dfdu -n "__fish_dfdu_using_subcommand dupes" -l network -d 'Descend into network filesystems (NFS, SMB, sshfs and other FUSE network mounts); with or without --cross-mounts'
 complete -c dfdu -n "__fish_dfdu_using_subcommand dupes" -l mft -d 'Windows, as administrator: read each NTFS volume\'s master file table instead of listing its directories, which is much faster on large volumes. Volumes whose table cannot be read are listed as usual'
+complete -c dfdu -n "__fish_dfdu_using_subcommand dupes" -l peer -d 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+complete -c dfdu -n "__fish_dfdu_using_subcommand dupes" -l no-peer -d 'Disable peer mode for the interactive browser'
 complete -c dfdu -n "__fish_dfdu_using_subcommand dupes" -s h -l help -d 'Print help'
 complete -c dfdu -n "__fish_dfdu_using_subcommand export" -s o -l output -d 'Where to write (`-` for stdout)' -r -F
 complete -c dfdu -n "__fish_dfdu_using_subcommand export" -l threads -d 'Worker threads' -r
@@ -172,6 +191,8 @@ complete -c dfdu -n "__fish_dfdu_using_subcommand export" -s x -l one-file-syste
 complete -c dfdu -n "__fish_dfdu_using_subcommand export" -l cross-mounts -d 'Descend into other local filesystems (disks, tmpfs)'
 complete -c dfdu -n "__fish_dfdu_using_subcommand export" -l network -d 'Descend into network filesystems (NFS, SMB, sshfs and other FUSE network mounts); with or without --cross-mounts'
 complete -c dfdu -n "__fish_dfdu_using_subcommand export" -l mft -d 'Windows, as administrator: read each NTFS volume\'s master file table instead of listing its directories, which is much faster on large volumes. Volumes whose table cannot be read are listed as usual'
+complete -c dfdu -n "__fish_dfdu_using_subcommand export" -l peer -d 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+complete -c dfdu -n "__fish_dfdu_using_subcommand export" -l no-peer -d 'Disable peer mode for the interactive browser'
 complete -c dfdu -n "__fish_dfdu_using_subcommand export" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c dfdu -n "__fish_dfdu_using_subcommand import" -l depth -d 'Levels of directories to print below the root' -r
 complete -c dfdu -n "__fish_dfdu_using_subcommand import" -l top -d 'Entries to print per directory, largest first' -r
@@ -179,29 +200,47 @@ complete -c dfdu -n "__fish_dfdu_using_subcommand import" -l type -d 'Count only
 complete -c dfdu -n "__fish_dfdu_using_subcommand import" -l apparent -d 'Show apparent sizes instead of disk usage'
 complete -c dfdu -n "__fish_dfdu_using_subcommand import" -l by-type -d 'After the tree, print disk usage by file type and the largest extensions'
 complete -c dfdu -n "__fish_dfdu_using_subcommand import" -l bytes -d 'Print only the root total in bytes'
+complete -c dfdu -n "__fish_dfdu_using_subcommand import" -l peer -d 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+complete -c dfdu -n "__fish_dfdu_using_subcommand import" -l no-peer -d 'Disable peer mode for the interactive browser'
 complete -c dfdu -n "__fish_dfdu_using_subcommand import" -s h -l help -d 'Print help'
 complete -c dfdu -n "__fish_dfdu_using_subcommand recover" -l finish -d 'Delete what is left of these staged items (numbers from the list)' -r
 complete -c dfdu -n "__fish_dfdu_using_subcommand recover" -l restore -d 'Put these staged items back at their paths (next to them as NAME.restored-N if something is there now), or take these items found in the trash back out of it' -r
 complete -c dfdu -n "__fish_dfdu_using_subcommand recover" -l dismiss -d 'Close these interrupted items: nothing is done on disk' -r
 complete -c dfdu -n "__fish_dfdu_using_subcommand recover" -l journals -d 'The journal directory (the default is dfdu\'s state directory)' -r -F
 complete -c dfdu -n "__fish_dfdu_using_subcommand recover" -l yes -d 'Finish and restore. Without it nothing is changed: what would be done is printed'
+complete -c dfdu -n "__fish_dfdu_using_subcommand recover" -l peer -d 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+complete -c dfdu -n "__fish_dfdu_using_subcommand recover" -l no-peer -d 'Disable peer mode for the interactive browser'
 complete -c dfdu -n "__fish_dfdu_using_subcommand recover" -s h -l help -d 'Print help'
+complete -c dfdu -n "__fish_dfdu_using_subcommand cache; and not __fish_seen_subcommand_from list clear help" -l peer -d 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+complete -c dfdu -n "__fish_dfdu_using_subcommand cache; and not __fish_seen_subcommand_from list clear help" -l no-peer -d 'Disable peer mode for the interactive browser'
 complete -c dfdu -n "__fish_dfdu_using_subcommand cache; and not __fish_seen_subcommand_from list clear help" -s h -l help -d 'Print help'
 complete -c dfdu -n "__fish_dfdu_using_subcommand cache; and not __fish_seen_subcommand_from list clear help" -f -a "list" -d 'List the cached scans, newest first: when each was written, its size, its entries and its directory, and where the cache is'
 complete -c dfdu -n "__fish_dfdu_using_subcommand cache; and not __fish_seen_subcommand_from list clear help" -f -a "clear" -d 'Remove every cached scan'
 complete -c dfdu -n "__fish_dfdu_using_subcommand cache; and not __fish_seen_subcommand_from list clear help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c dfdu -n "__fish_dfdu_using_subcommand cache; and __fish_seen_subcommand_from list" -l peer -d 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+complete -c dfdu -n "__fish_dfdu_using_subcommand cache; and __fish_seen_subcommand_from list" -l no-peer -d 'Disable peer mode for the interactive browser'
 complete -c dfdu -n "__fish_dfdu_using_subcommand cache; and __fish_seen_subcommand_from list" -s h -l help -d 'Print help'
+complete -c dfdu -n "__fish_dfdu_using_subcommand cache; and __fish_seen_subcommand_from clear" -l peer -d 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+complete -c dfdu -n "__fish_dfdu_using_subcommand cache; and __fish_seen_subcommand_from clear" -l no-peer -d 'Disable peer mode for the interactive browser'
 complete -c dfdu -n "__fish_dfdu_using_subcommand cache; and __fish_seen_subcommand_from clear" -s h -l help -d 'Print help'
 complete -c dfdu -n "__fish_dfdu_using_subcommand cache; and __fish_seen_subcommand_from help" -f -a "list" -d 'List the cached scans, newest first: when each was written, its size, its entries and its directory, and where the cache is'
 complete -c dfdu -n "__fish_dfdu_using_subcommand cache; and __fish_seen_subcommand_from help" -f -a "clear" -d 'Remove every cached scan'
 complete -c dfdu -n "__fish_dfdu_using_subcommand cache; and __fish_seen_subcommand_from help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c dfdu -n "__fish_dfdu_using_subcommand man" -l peer -d 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+complete -c dfdu -n "__fish_dfdu_using_subcommand man" -l no-peer -d 'Disable peer mode for the interactive browser'
 complete -c dfdu -n "__fish_dfdu_using_subcommand man" -s h -l help -d 'Print help'
 complete -c dfdu -n "__fish_dfdu_using_subcommand update" -l check -d 'Only check whether a newer release is out; change nothing'
 complete -c dfdu -n "__fish_dfdu_using_subcommand update" -l force -d 'Install the latest release even when this build is as new (to repair a copy)'
+complete -c dfdu -n "__fish_dfdu_using_subcommand update" -l peer -d 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+complete -c dfdu -n "__fish_dfdu_using_subcommand update" -l no-peer -d 'Disable peer mode for the interactive browser'
 complete -c dfdu -n "__fish_dfdu_using_subcommand update" -s h -l help -d 'Print help'
+complete -c dfdu -n "__fish_dfdu_using_subcommand completions" -l peer -d 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+complete -c dfdu -n "__fish_dfdu_using_subcommand completions" -l no-peer -d 'Disable peer mode for the interactive browser'
 complete -c dfdu -n "__fish_dfdu_using_subcommand completions" -s h -l help -d 'Print help'
 complete -c dfdu -n "__fish_dfdu_using_subcommand agent" -l threads -d 'Worker threads' -r
 complete -c dfdu -n "__fish_dfdu_using_subcommand agent" -l protocols -d 'Print the protocol versions this agent speaks (`MIN MAX`) and exit'
+complete -c dfdu -n "__fish_dfdu_using_subcommand agent" -l peer -d 'Enable peer mode with a private local socket (the default; B binds or unbinds)'
+complete -c dfdu -n "__fish_dfdu_using_subcommand agent" -l no-peer -d 'Disable peer mode for the interactive browser'
 complete -c dfdu -n "__fish_dfdu_using_subcommand agent" -s h -l help -d 'Print help'
 complete -c dfdu -n "__fish_dfdu_using_subcommand help; and not __fish_seen_subcommand_from peers peer-attach scan disks report clean diff history dupes export import recover cache man update completions agent help" -f -a "peers" -d 'List live peer-mode instances on this host, removing stale entries'
 complete -c dfdu -n "__fish_dfdu_using_subcommand help; and not __fish_seen_subcommand_from peers peer-attach scan disks report clean diff history dupes export import recover cache man update completions agent help" -f -a "peer-attach" -d 'Bridge stdin and stdout to a local peer instance (used over ssh)'

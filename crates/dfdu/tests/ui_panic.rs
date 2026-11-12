@@ -95,7 +95,9 @@ impl Browser {
         cmd.args(["--theme", "ansi"])
             .arg(tree)
             .env("DFDU_STATE_DIR", state)
+            .env("HOME", state)
             .env("DFDU_CACHE_DIR", state.join("cache"))
+            .env("DFDU_DISCOVERY_PORT", "0")
             .env("TERM", "xterm-256color")
             .env("RUST_BACKTRACE", "0")
             .stdin(Stdio::from(slave.try_clone().unwrap()))
@@ -104,8 +106,8 @@ impl Browser {
         if panic_on_key {
             cmd.env("DFDU_TEST_UI_PANIC", "1");
         }
-        if peer {
-            cmd.arg("--peer");
+        if !peer && !extra.contains(&"--bind") {
+            cmd.arg("--no-peer");
         }
         cmd.args(extra);
         if peer || extra.contains(&"--bind") {
@@ -399,6 +401,21 @@ fn termination_reaps_stalled_ssh_and_its_descendant_before_exit() {
 }
 
 #[test]
+fn no_peer_disables_browser_registration_and_footer() {
+    let tmp = tempfile::Builder::new()
+        .prefix("dp-")
+        .tempdir_in("/tmp")
+        .unwrap();
+    let tree = tree(tmp.path());
+    let state = tmp.path().join("state");
+    let mut browser = Browser::start(&tree, &state, false);
+    assert!(!state.join(".local/state/dfdu/peers").exists());
+    assert!(!String::from_utf8_lossy(&browser.output()).contains("unbound"));
+    browser.press(b"q");
+    assert!(browser.wait().success());
+}
+
+#[test]
 fn peer_registration_is_removed_on_quit_panic_and_termination_signals() {
     for mode in ["quit", "panic", "term", "hup", "int"] {
         let tmp = tempfile::Builder::new()
@@ -410,6 +427,7 @@ fn peer_registration_is_removed_on_quit_panic_and_termination_signals() {
         let mut browser = Browser::start_options(&tree, &state, mode == "panic", true);
         let peers = state.join(".local/state/dfdu/peers");
         assert_eq!(fs::read_dir(&peers).unwrap().count(), 2, "{mode}");
+        assert!(String::from_utf8_lossy(&browser.output()).contains("unbound"));
         match mode {
             "quit" => {
                 browser.press(b"q");

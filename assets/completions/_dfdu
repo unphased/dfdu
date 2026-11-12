@@ -15,7 +15,7 @@ _dfdu() {
 
     local context curcontext="$curcontext" state line
     _arguments "${_arguments_options[@]}" : \
-'--bind=[Bind to ID, '\''HOST ID'\'' or HOST\:ID at startup (implies --peer)]:TARGET:_default' \
+'(--no-peer --remote -f --file --resume-from --disks)--bind=[Bind to ID, '\''HOST ID'\'' or HOST\:ID at startup]:TARGET:_default' \
 '--peer-remote-bin=[Remote dfdu executable for peer binding (expanded by the remote shell)]:PEER_REMOTE_BIN:_default' \
 '(--disks -f --file)--resume-from=[Open the scan saved in FILE (a snapshot or an ncdu export) at once, and rescan its directory in the background, replacing it when done. A snapshot is rescanned with the mount options it was taken with]:FILE:_files' \
 '(--disks)-f+[Browse a scan saved in FILE (a snapshot, an ncdu JSON export, plain or zstd, or an ncdu binary export from \`ncdu -O\`; \`-\` for stdin), read-only]:FILE:_files' \
@@ -34,7 +34,8 @@ upload\:"One sent earlier, else send one, without asking"))' \
 '--network[Descend into network filesystems (NFS, SMB, sshfs and other FUSE network mounts); with or without --cross-mounts]' \
 '--mft[Windows, as administrator\: read each NTFS volume'\''s master file table instead of listing its directories, which is much faster on large volumes. Volumes whose table cannot be read are listed as usual]' \
 '--no-rules[Do not classify entries\: no categories, no cleanup candidates]' \
-'--peer[Enable peer mode with a private local socket (B binds or unbinds)]' \
+'--peer[Enable peer mode with a private local socket (the default; B binds or unbinds)]' \
+'(--peer)--no-peer[Disable peer mode for the interactive browser]' \
 '()--disks[Choose a disk to browse from the mounted filesystems]' \
 '--read-only[Never delete anything\: the browser leaves out its delete keys and runs cleanup commands only as dry runs]' \
 '--no-history[Do not record the scan in the history, nor show what grew since the last one]' \
@@ -59,12 +60,16 @@ upload\:"One sent earlier, else send one, without asking"))' \
 _arguments "${_arguments_options[@]}" : \
 '--discover[Discover hosts over LAN and tailnet UDP]' \
 '--json[Print instance metadata as JSON]' \
+'--peer[Enable peer mode with a private local socket (the default; B binds or unbinds)]' \
+'(--peer)--no-peer[Disable peer mode for the interactive browser]' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
 ;;
 (peer-attach)
 _arguments "${_arguments_options[@]}" : \
+'--peer[Enable peer mode with a private local socket (the default; B binds or unbinds)]' \
+'(--peer)--no-peer[Disable peer mode for the interactive browser]' \
 '-h[Print help]' \
 '--help[Print help]' \
 ':id:_default' \
@@ -98,6 +103,8 @@ upload\:"One sent earlier, else send one, without asking"))' \
 '--errors[List every entry that could not be read, with the reason]' \
 '--no-history[Do not record the scan in the history (\`dfdu diff\`, \`dfdu history\`)]' \
 '--debug-stats[Print pipeline counters and applier timing (lock hold and wait) after the scan]' \
+'--peer[Enable peer mode with a private local socket (the default; B binds or unbinds)]' \
+'(--peer)--no-peer[Disable peer mode for the interactive browser]' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
 '::path:_files' \
@@ -105,6 +112,8 @@ upload\:"One sent earlier, else send one, without asking"))' \
 ;;
 (disks)
 _arguments "${_arguments_options[@]}" : \
+'--peer[Enable peer mode with a private local socket (the default; B binds or unbinds)]' \
+'(--peer)--no-peer[Disable peer mode for the interactive browser]' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
@@ -123,6 +132,8 @@ _arguments "${_arguments_options[@]}" : \
 '--cross-mounts[Descend into other local filesystems (disks, tmpfs)]' \
 '--network[Descend into network filesystems (NFS, SMB, sshfs and other FUSE network mounts); with or without --cross-mounts]' \
 '--mft[Windows, as administrator\: read each NTFS volume'\''s master file table instead of listing its directories, which is much faster on large volumes. Volumes whose table cannot be read are listed as usual]' \
+'--peer[Enable peer mode with a private local socket (the default; B binds or unbinds)]' \
+'(--peer)--no-peer[Disable peer mode for the interactive browser]' \
 '-h[Print help]' \
 '--help[Print help]' \
 '::path:_files' \
@@ -147,6 +158,8 @@ _arguments "${_arguments_options[@]}" : \
 '--cross-mounts[Descend into other local filesystems (disks, tmpfs)]' \
 '--network[Descend into network filesystems (NFS, SMB, sshfs and other FUSE network mounts); with or without --cross-mounts]' \
 '--mft[Windows, as administrator\: read each NTFS volume'\''s master file table instead of listing its directories, which is much faster on large volumes. Volumes whose table cannot be read are listed as usual]' \
+'--peer[Enable peer mode with a private local socket (the default; B binds or unbinds)]' \
+'(--peer)--no-peer[Disable peer mode for the interactive browser]' \
 '-h[Print help]' \
 '--help[Print help]' \
 '::path:_files' \
@@ -165,6 +178,8 @@ _arguments "${_arguments_options[@]}" : \
 '--cross-mounts[Descend into other local filesystems (disks, tmpfs)]' \
 '--network[Descend into network filesystems (NFS, SMB, sshfs and other FUSE network mounts); with or without --cross-mounts]' \
 '--mft[Windows, as administrator\: read each NTFS volume'\''s master file table instead of listing its directories, which is much faster on large volumes. Volumes whose table cannot be read are listed as usual]' \
+'--peer[Enable peer mode with a private local socket (the default; B binds or unbinds)]' \
+'(--peer)--no-peer[Disable peer mode for the interactive browser]' \
 '-h[Print help]' \
 '--help[Print help]' \
 '*::paths -- A directory, scanned now and compared with its last recorded scan; or two files (a snapshot or an ncdu export each), the older first:_files' \
@@ -172,6 +187,8 @@ _arguments "${_arguments_options[@]}" : \
 ;;
 (history)
 _arguments "${_arguments_options[@]}" : \
+'--peer[Enable peer mode with a private local socket (the default; B binds or unbinds)]' \
+'(--peer)--no-peer[Disable peer mode for the interactive browser]' \
 '-h[Print help]' \
 '--help[Print help]' \
 '::path -- Only scans of this directory:_files' \
@@ -188,6 +205,8 @@ _arguments "${_arguments_options[@]}" : \
 '--cross-mounts[Descend into other local filesystems (disks, tmpfs)]' \
 '--network[Descend into network filesystems (NFS, SMB, sshfs and other FUSE network mounts); with or without --cross-mounts]' \
 '--mft[Windows, as administrator\: read each NTFS volume'\''s master file table instead of listing its directories, which is much faster on large volumes. Volumes whose table cannot be read are listed as usual]' \
+'--peer[Enable peer mode with a private local socket (the default; B binds or unbinds)]' \
+'(--peer)--no-peer[Disable peer mode for the interactive browser]' \
 '-h[Print help]' \
 '--help[Print help]' \
 '::path:_files' \
@@ -210,6 +229,8 @@ upload\:"One sent earlier, else send one, without asking"))' \
 '--cross-mounts[Descend into other local filesystems (disks, tmpfs)]' \
 '--network[Descend into network filesystems (NFS, SMB, sshfs and other FUSE network mounts); with or without --cross-mounts]' \
 '--mft[Windows, as administrator\: read each NTFS volume'\''s master file table instead of listing its directories, which is much faster on large volumes. Volumes whose table cannot be read are listed as usual]' \
+'--peer[Enable peer mode with a private local socket (the default; B binds or unbinds)]' \
+'(--peer)--no-peer[Disable peer mode for the interactive browser]' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
 '::path:_files' \
@@ -223,6 +244,8 @@ _arguments "${_arguments_options[@]}" : \
 '--apparent[Show apparent sizes instead of disk usage]' \
 '--by-type[After the tree, print disk usage by file type and the largest extensions]' \
 '--bytes[Print only the root total in bytes]' \
+'--peer[Enable peer mode with a private local socket (the default; B binds or unbinds)]' \
+'(--peer)--no-peer[Disable peer mode for the interactive browser]' \
 '-h[Print help]' \
 '--help[Print help]' \
 ':file -- The export (`-` for stdin):_files' \
@@ -235,12 +258,16 @@ _arguments "${_arguments_options[@]}" : \
 '*--dismiss=[Close these interrupted items\: nothing is done on disk]:N:_default' \
 '--journals=[The journal directory (the default is dfdu'\''s state directory)]:JOURNALS:_files' \
 '--yes[Finish and restore. Without it nothing is changed\: what would be done is printed]' \
+'--peer[Enable peer mode with a private local socket (the default; B binds or unbinds)]' \
+'(--peer)--no-peer[Disable peer mode for the interactive browser]' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
 ;;
 (cache)
 _arguments "${_arguments_options[@]}" : \
+'--peer[Enable peer mode with a private local socket (the default; B binds or unbinds)]' \
+'(--peer)--no-peer[Disable peer mode for the interactive browser]' \
 '-h[Print help]' \
 '--help[Print help]' \
 ":: :_dfdu__subcmd__cache_commands" \
@@ -255,12 +282,16 @@ _arguments "${_arguments_options[@]}" : \
         case $line[1] in
             (list)
 _arguments "${_arguments_options[@]}" : \
+'--peer[Enable peer mode with a private local socket (the default; B binds or unbinds)]' \
+'(--peer)--no-peer[Disable peer mode for the interactive browser]' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
 ;;
 (clear)
 _arguments "${_arguments_options[@]}" : \
+'--peer[Enable peer mode with a private local socket (the default; B binds or unbinds)]' \
+'(--peer)--no-peer[Disable peer mode for the interactive browser]' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
@@ -299,6 +330,8 @@ esac
 ;;
 (man)
 _arguments "${_arguments_options[@]}" : \
+'--peer[Enable peer mode with a private local socket (the default; B binds or unbinds)]' \
+'(--peer)--no-peer[Disable peer mode for the interactive browser]' \
 '-h[Print help]' \
 '--help[Print help]' \
 ':dir:_files' \
@@ -308,12 +341,16 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 '--check[Only check whether a newer release is out; change nothing]' \
 '(--check)--force[Install the latest release even when this build is as new (to repair a copy)]' \
+'--peer[Enable peer mode with a private local socket (the default; B binds or unbinds)]' \
+'(--peer)--no-peer[Disable peer mode for the interactive browser]' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
 ;;
 (completions)
 _arguments "${_arguments_options[@]}" : \
+'--peer[Enable peer mode with a private local socket (the default; B binds or unbinds)]' \
+'(--peer)--no-peer[Disable peer mode for the interactive browser]' \
 '-h[Print help]' \
 '--help[Print help]' \
 ':shell:(bash elvish fish powershell zsh)' \
@@ -323,6 +360,8 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 '--threads=[Worker threads]:THREADS:_default' \
 '--protocols[Print the protocol versions this agent speaks (\`MIN MAX\`) and exit]' \
+'--peer[Enable peer mode with a private local socket (the default; B binds or unbinds)]' \
+'(--peer)--no-peer[Disable peer mode for the interactive browser]' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0

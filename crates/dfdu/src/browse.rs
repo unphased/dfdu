@@ -31,7 +31,13 @@ pub fn run(cli: Cli) -> Result<ExitCode, ExitCode> {
         paths.push(PathBuf::from("."));
     }
     #[cfg(unix)]
-    let peer = if cli.peer {
+    let peer = if cli.peer
+        && !cli.no_peer
+        && cli.remote.is_none()
+        && cli.import.is_none()
+        && cli.resume_from.is_none()
+        && !cli.disks
+    {
         Some(crate::peer_cli::start(
             &paths,
             cli.bind.as_deref(),
@@ -46,7 +52,7 @@ pub fn run(cli: Cli) -> Result<ExitCode, ExitCode> {
         .map(|options| crate::peer_cli::signals(&options.peer))
         .transpose()?;
     #[cfg(not(unix))]
-    if cli.peer {
+    if cli.bind.is_some() {
         eprintln!("dfdu: peer mode requires Unix");
         return Err(ExitCode::from(2));
     }
