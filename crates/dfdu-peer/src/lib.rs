@@ -153,6 +153,9 @@ enum Frame {
     #[serde(rename = "nav_status")]
     NavStatus(NavStatus),
     Hello(Hello),
+    Swap {},
+    #[serde(rename = "swap_ok")]
+    SwapOk {},
     Ping {},
     Bye {
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -169,6 +172,7 @@ struct Hello {
 enum Control {
     Bind(String, String),
     Unbind,
+    Swap,
     Stop(Option<Sender<()>>),
 }
 
@@ -395,6 +399,12 @@ impl Peer {
             .send(Control::Bind(target.into(), remote_bin.into()))
             .map_err(|_| error("peer stopped"))
     }
+    /// Ask the bound slave to become master. Only the master can initiate this.
+    pub fn swap(&self) -> io::Result<()> {
+        self.check_role(Role::Master)?;
+        self.control.send(Control::Swap).map_err(io::Error::other)
+    }
+
     /// Retain only the newest unsent selection. Sequence numbers must increase within a binding.
     /// Only a bound master may send. Older or duplicate sequences are ignored.
     /// A frame already being written cannot be withdrawn; receivers also check sequences.
@@ -609,6 +619,7 @@ struct Link {
     ping: Instant,
     role: Role,
     ready: bool,
+    swapping: bool,
     sent_seq: Option<u64>,
     received_seq: Option<u64>,
     incoming: Pending,
@@ -636,6 +647,7 @@ impl Link {
             ping: Instant::now(),
             role,
             ready: false,
+            swapping: false,
             sent_seq: None,
             received_seq: None,
             incoming: Pending::default(),
@@ -649,6 +661,21 @@ impl Link {
             role,
         }));
         Ok(link)
+    }
+    fn start_swap(&mut self) {
+        if self.ready && self.role == Role::Master && !self.swapping {
+            self.swapping = true;
+            self.outgoing = Pending::default();
+            self.queue(Frame::Swap {});
+        }
+    }
+    fn flip(&mut self, role: Role) {
+        self.role = role;
+        self.swapping = false;
+        self.sent_seq = None;
+        self.received_seq = None;
+        self.incoming = Pending::default();
+        self.outgoing = Pending::default();
     }
     fn queue(&mut self, frame: Frame) {
         self.output.extend(serde_json::to_vec(&frame).unwrap());
@@ -719,6 +746,17 @@ impl Link {
                             Frame::NavStatus(status) if self.ready && self.role == Role::Master => {
                                 if self.sent_seq == Some(status.seq) {
                                     self.incoming.status = Some(status);
+                                }
+                            }
+                            Frame::Swap {} if self.ready => {
+                                if self.role == Role::Slave && !self.swapping {
+                                    self.queue(Frame::SwapOk {});
+                                    self.flip(Role::Master);
+                                }
+                            }
+                            Frame::SwapOk {} if self.ready => {
+                                if self.role == Role::Master && self.swapping {
+                                    self.flip(Role::Slave);
                                 }
                             }
                             Frame::Ping {} if self.ready => {}
@@ -805,6 +843,11 @@ fn run(
                     }
                     return;
                 }
+                Control::Swap => {
+                    if let Some(link) = &mut link {
+                        link.start_swap();
+                    }
+                }
                 Control::Unbind => {
                     if let Some(link) = &mut link {
                         link.queue(Frame::Bye { reason: None });
@@ -862,7 +905,7 @@ fn run(
         }
         let queued = std::mem::take(&mut *pending.lock().unwrap());
         if let Some(active) = &mut link {
-            if active.ready {
+            if active.ready && !active.swapping {
                 if active.role == Role::Master {
                     if let Some(nav) = queued.nav
                         && active.sent_seq.is_none_or(|seq| nav.seq > seq)
@@ -891,7 +934,22 @@ fn run(
                     }
                 }
             }
+            let previous_role = active.role;
             let result = active.poll();
+            if previous_role != active.role {
+                *pending.lock().unwrap() = Pending::default();
+                let partner = status.lock().unwrap().peer.clone();
+                publish(
+                    &status,
+                    &tx,
+                    &mut instance,
+                    &dir,
+                    Status {
+                        role: active.role,
+                        peer: partner,
+                    },
+                );
+            }
             if let Some(nav) = active.incoming.nav.take() {
                 let _ = tx.send(Event::Nav(nav));
             }

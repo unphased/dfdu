@@ -6,7 +6,7 @@ use ratatui::crossterm::event::{KeyEvent, KeyModifiers};
 use super::*;
 use crate::app::App;
 
-const ALL: [Action; 63] = [
+const ALL: [Action; 64] = [
     Action::Quit,
     Action::Up,
     Action::Down,
@@ -21,6 +21,7 @@ const ALL: [Action; 63] = [
     Action::Parent,
     Action::GoTo,
     Action::Peer,
+    Action::PeerSwap,
     Action::SortSize,
     Action::SortName,
     Action::SortItems,

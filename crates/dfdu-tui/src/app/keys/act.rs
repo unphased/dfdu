@@ -67,6 +67,10 @@ fn front_end(app: &mut App, a: Action) -> Vec<Effect> {
         Action::GoTo => goto::open(app),
         #[cfg(unix)]
         Action::Peer => crate::peer::open(app),
+        #[cfg(unix)]
+        Action::PeerSwap => crate::peer::swap(app),
+        #[cfg(not(unix))]
+        Action::PeerSwap => {}
         Action::FocusDetails => return details::focus(app),
         Action::CopyPath => return selected_path::copy(app).into_iter().collect(),
         _ => {}

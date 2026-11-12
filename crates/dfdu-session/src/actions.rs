@@ -18,6 +18,7 @@ pub enum Action {
     Parent,
     GoTo,
     Peer,
+    PeerSwap,
     SortSize,
     SortName,
     SortItems,
@@ -162,6 +163,12 @@ pub const ACTIONS: &[ActionInfo] = &[
         Action::Peer,
         "B",
         "bind / unbind peer (TARGET)",
+        Group::Global,
+    ),
+    row(
+        Action::PeerSwap,
+        "W",
+        "swap peer roles (master only)",
         Group::Global,
     ),
     row(

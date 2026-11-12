@@ -44,9 +44,23 @@ pub(crate) fn status_text(id: &str, status: &dfdu_peer::Status) -> String {
             } else {
                 "→"
             };
-            format!(" {arrow} {p}")
+            let hint = if status.role == dfdu_peer::Role::Master {
+                " · W swap"
+            } else {
+                ""
+            };
+            format!(" {arrow} {p}{hint}")
         })
     )
+}
+
+pub(crate) fn swap(app: &mut crate::app::App) {
+    if let Some(options) = &app.peer
+        && options.peer.status().role == dfdu_peer::Role::Master
+        && let Err(e) = options.peer.swap()
+    {
+        app.session.status = Some(format!("peer: {e}"));
+    }
 }
 
 type DiscoveryResult = std::io::Result<Vec<dfdu_peer::Beacon>>;
@@ -524,6 +538,7 @@ mod tests {
         assert!(app.peer_prompt.is_none());
         wait_role(&master, dfdu_peer::Role::Master);
         wait_role(&slave, dfdu_peer::Role::Slave);
+        assert!(slave.swap().is_err(), "only the master may swap");
         app.key(b, Instant::now());
         wait_role(&master, dfdu_peer::Role::Unbound);
         wait_role(&slave, dfdu_peer::Role::Unbound);

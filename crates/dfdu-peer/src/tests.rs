@@ -576,6 +576,12 @@ fn swap_handshake_ignores_wrong_role_and_duplicate_frames() {
     slave.flush().unwrap();
     master.poll().unwrap();
     assert_eq!(master.role, Role::Slave);
-    assert_eq!(serde_json::to_string(&Frame::Swap {}).unwrap(), r#"{"swap":{}}"#);
-    assert_eq!(serde_json::to_string(&Frame::SwapOk {}).unwrap(), r#"{"swap_ok":{}}"#);
+    assert_eq!(
+        serde_json::to_string(&Frame::Swap {}).unwrap(),
+        r#"{"swap":{}}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&Frame::SwapOk {}).unwrap(),
+        r#"{"swap_ok":{}}"#
+    );
 }

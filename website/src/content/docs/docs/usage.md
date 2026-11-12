@@ -29,6 +29,7 @@ Keys follow ncdu. Press `?` in the app for the full list.
 | `r` | Rescan | `q` | Quit |
 | `Ctrl-G` | Go to a folder | `?` | All keys |
 | `B` | Bind or unbind (peer mode) | | |
+| `W` | Swap peer roles (master only) | | |
 
 Unreadable entries are marked `!` with the reason. Press `!` to list them all.
 

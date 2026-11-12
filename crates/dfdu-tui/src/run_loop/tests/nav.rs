@@ -55,8 +55,6 @@ fn navigation_pair(swap: bool) {
                 slave_tx.send(event).unwrap();
             }
             if swap {
-                // Slave key is a no-op. The master alone can initiate the handshake.
-                slave_tx.send(key('W')).unwrap();
                 master_tx.send(key('W')).unwrap();
                 wait_for_match(&slave_frame, &master_frame, "photo.bin")?;
                 let a = master_frame.lock().unwrap().1.clone();
@@ -86,13 +84,15 @@ fn navigation_pair(swap: bool) {
             master_selected,
             source.join("z-photo.bin").display().to_string()
         );
-        if !swap { assert!(master_footer.contains('✓'), "{master_footer}"); }
+        if !swap {
+            assert!(master_footer.contains('✓'), "{master_footer}");
+        }
         assert_eq!(selected, backup.join("z-photo.bin").display().to_string());
         if !swap {
-        assert!(panel.contains("photo.bin"));
-        assert!(panel.contains("z-photo.bin"));
-        assert!(panel.contains('✓'));
-        assert!(panel.contains("21"));
+            assert!(panel.contains("photo.bin"));
+            assert!(panel.contains("z-photo.bin"));
+            assert!(panel.contains('✓'));
+            assert!(panel.contains("21"));
         }
     });
 }

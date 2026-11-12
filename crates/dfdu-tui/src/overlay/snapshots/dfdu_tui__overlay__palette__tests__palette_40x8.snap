@@ -3,7 +3,7 @@ source: crates/dfdu-tui/src/overlay/palette.rs
 expression: frame
 ---
  dfdu │ [1 Files] 2 3 4 5       ⠋ 00:00
- /┌ Commands 67/67 ──────────────────┐k
+ /┌ Commands 68/68 ──────────────────┐k
   │ : ▌                              │
   │ Theme: ansi              setting │
   │ Theme: mono              setting │
