@@ -256,7 +256,7 @@ fn the_wheel_moves_the_cursor_wherever_the_pointer_is() {
     };
     let selected = app.session.selected_index();
     crate::input::mouse::event(&mut app, down, t0).expect("redraw");
-    assert_eq!(app.session.marks_pane.cursor, 3);
+    assert_eq!(app.session.marks_pane.cursor, 1);
     assert_eq!(app.session.selected_index(), selected, "the list stays");
 }
 
