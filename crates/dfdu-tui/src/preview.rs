@@ -174,6 +174,9 @@ mod tests {
         let down = fit(3, (800, 800)).unwrap();
         assert_eq!(down, Rect::new(40, 3, 38, 19));
         assert_eq!(down.y, 3, "top-left touches selected row");
+        // Small images keep their pixel size instead of blowing up.
+        assert_eq!(fit(12, (40, 40)), Some(Rect::new(40, 12, 4, 2)));
+        assert_eq!(fit(20, (40, 40)), Some(Rect::new(40, 20, 4, 2)));
         assert_eq!(fit(12, (0, 800)), None);
         assert_eq!(
             super::fit(Rect::new(40, 2, 1, 20), 3, (20, 20), (10, 20)),
