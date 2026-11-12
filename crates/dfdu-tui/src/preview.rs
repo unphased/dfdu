@@ -116,6 +116,24 @@ mod tests {
     use super::{Action, PreviewState, Request, clip, is_image, supported_terminal};
 
     #[test]
+    fn fits_pixels_and_chooses_larger_side_with_downward_ties() {
+        let bounds = Rect::new(40, 2, 40, 20);
+        let fit = |row, image| super::fit(bounds, row, image, (10, 20));
+        // Wide images fill the width on either side, so down wins the tie.
+        assert_eq!(fit(12, (800, 200)), Some(Rect::new(40, 12, 40, 5)));
+        assert_eq!(fit(3, (200, 800)), Some(Rect::new(40, 3, 9, 19)));
+        let up = fit(20, (200, 800)).unwrap();
+        assert_eq!(up, Rect::new(40, 2, 9, 19));
+        assert_eq!(up.bottom() - 1, 20, "bottom-left touches selected row");
+        let down = fit(3, (800, 800)).unwrap();
+        assert_eq!(down, Rect::new(40, 3, 38, 19));
+        assert_eq!(down.y, 3, "top-left touches selected row");
+        assert_eq!(fit(12, (0, 800)), None);
+        assert_eq!(super::fit(Rect::new(40, 2, 1, 20), 3, (20, 20), (10, 20)), None);
+        assert_eq!(super::fit(Rect::new(40, 2, 40, 1), 2, (20, 20), (10, 20)), None);
+    }
+
+    #[test]
     fn clips_to_terminal_and_rejects_empty_or_offscreen() {
         let screen = Rect::new(0, 0, 80, 24);
         assert_eq!(
