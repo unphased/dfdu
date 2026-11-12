@@ -22,7 +22,7 @@ use crate::features::details;
 /// A second click on the same row within this long opens it.
 const DOUBLE_CLICK: Duration = Duration::from_millis(400);
 /// Rows one wheel step moves.
-const WHEEL_ROWS: i8 = 3;
+const WHEEL_ROWS: i8 = 1;
 
 #[derive(Clone, Debug, Default)]
 pub struct Mouse {
