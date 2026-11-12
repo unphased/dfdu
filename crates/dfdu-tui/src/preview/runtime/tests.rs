@@ -143,15 +143,15 @@ fn real_worker_fits_up_and_encodes_the_fitted_placement() {
     let out = Output::default();
     let mut preview = Preview::new(out.clone(), true).unwrap();
     let mut request = Request::new(path, Rect::new(40, 2, 40, 20));
-    request.row = 20;
+    request.row = 21; // last row: only the upward fit exists
     preview.after_draw(Some(request.clone())).unwrap();
     let decoded = preview.results().recv_timeout(WAIT).unwrap();
     assert!(decoded.stream.is_some());
     preview.complete(decoded);
     preview.after_draw(Some(request)).unwrap();
     let stream = String::from_utf8(out.take()).unwrap();
-    assert!(stream.starts_with("\x1b7\x1b[3;41H"));
-    assert!(stream.contains("c=38,r=19,"));
+    assert!(stream.starts_with("\x1b7\x1b[22;41H"));
+    assert!(stream.contains("c=1,r=1,"), "1x1 image stays 1 cell");
 }
 
 #[test]

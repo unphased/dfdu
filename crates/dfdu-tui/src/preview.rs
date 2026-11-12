@@ -26,7 +26,8 @@ pub fn clip(requested: Rect, screen: Rect) -> Option<Rect> {
 }
 
 /// Fits on either side of the selected row, including that row on both sides.
-/// The cell envelope rounds up inside the region. Equal image scales prefer down.
+/// Never upscales past one image pixel per screen pixel. The cell envelope rounds up
+/// inside the region. Equal image scales prefer down.
 pub fn fit(bounds: Rect, row: u16, image: (u32, u32), cell: (u16, u16)) -> Option<Rect> {
     if bounds.width < 2
         || row < bounds.y
@@ -43,7 +44,8 @@ pub fn fit(bounds: Rect, row: u16, image: (u32, u32), cell: (u16, u16)) -> Optio
             return None;
         }
         let scale = (f64::from(bounds.width) * f64::from(cell.0) / f64::from(image.0))
-            .min(f64::from(height) * f64::from(cell.1) / f64::from(image.1));
+            .min(f64::from(height) * f64::from(cell.1) / f64::from(image.1))
+            .min(1.0);
         let width = ((f64::from(image.0) * scale / f64::from(cell.0))
             .ceil()
             .max(1.0) as u16)
