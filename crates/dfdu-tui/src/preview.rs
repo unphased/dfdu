@@ -133,6 +133,7 @@ mod tests {
             (Some("kitty-custom"), None, None),
             (Some("xterm-ghostty"), None, None),
             (Some("tmux-256color"), Some("ghostty"), None),
+            (Some("xterm-256color"), Some("herdr"), None),
             (Some("screen"), None, Some("1")),
             (None, None, Some("")),
         ] {
