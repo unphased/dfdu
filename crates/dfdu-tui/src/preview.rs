@@ -37,7 +37,8 @@ pub fn supported_terminal(
         Some("1") => true,
         _ => {
             term.is_some_and(|term| term.contains("kitty") || term.contains("ghostty"))
-                || term_program == Some("ghostty")
+                // herdr hides the outer terminal but passes kitty graphics through.
+                || matches!(term_program, Some("ghostty" | "herdr"))
                 || kitty_window_id.is_some()
         }
     }

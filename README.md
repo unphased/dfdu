@@ -50,7 +50,7 @@ sequenceDiagram
 - **Recent caches only:** cached scans load for 1 hour by default; set `DFDU_CACHE_MAX_AGE` to a duration such as `20m`, `1h` or `2d`.
 - **Multiple roots:** `dfdu PATH PATH...` scans and browses several roots in one tree.
 - **Image preview:** JPEG, PNG and ARW files get a kitty-graphics thumbnail beside the selected
-  row (kitty and Ghostty auto-detected; `DFDU_IMAGE_PREVIEW=1` forces it on, `=0` off). The
+  row (kitty, Ghostty and herdr auto-detected; `DFDU_IMAGE_PREVIEW=1` forces it on, `=0` off). The
   decoder is `~/.vim/jpg-preview`, a path dependency, so the fork builds only with that
   checkout present.
 - **Builds:** dev and test builds use `line-tables-only` debug info; opt in to full debug info
