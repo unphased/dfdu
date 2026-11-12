@@ -174,7 +174,18 @@ impl SessionState {
             ident: None,
         };
         self.list.moved = true;
-        self.selected = Some(Selection::named(name.to_vec()));
+        // An idle scan may not produce another snapshot when the directory is unchanged.
+        // Resolve an entry already shown now; otherwise refresh finds it by name later.
+        self.selected = Some(
+            self.snap
+                .entries
+                .iter()
+                .find(|entry| {
+                    self.snap.dir_path == parent && entry.depth == 0 && &*entry.name == name
+                })
+                .map(Selection::of)
+                .unwrap_or_else(|| Selection::named(name.to_vec())),
+        );
         Some(Moved {
             left,
             opened: Some(parent),

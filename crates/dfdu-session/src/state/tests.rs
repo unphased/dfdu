@@ -25,6 +25,20 @@ pub(crate) fn browser(entries: Vec<EntryData>) -> SessionState {
     s
 }
 
+#[test]
+fn go_to_an_entry_already_shown_selects_it_without_another_snapshot() {
+    let mut child = test_entry(2, "b", 1);
+    child.depth = 1;
+    let mut s = browser(vec![child, test_entry(0, "a", 10), test_entry(1, "b", 5)]);
+    let root = s.snap.dir_path.clone();
+    for name in [b"b", b"a"] {
+        let path = root.join(name);
+        s.go_to(&path, &root).unwrap();
+        assert_eq!(crate::selected_path::selected(&s).unwrap().0, path);
+        assert_eq!(s.selected_entry().unwrap().depth, 0);
+    }
+}
+
 /// Sorts the rows again, as a front end's refresh does with an exact sort.
 pub(crate) fn sort(s: &mut SessionState) {
     s.filter.prepare(&s.snap, true);
