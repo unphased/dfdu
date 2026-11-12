@@ -12,6 +12,9 @@ test:
 
 install: all
 	mkdir -p "$(HOME)/.local/bin"
+	# Replace the file, not its contents: macOS kills a binary rewritten in place
+	# (stale code-signature cache, exit 137).
+	rm -f "$(HOME)/.local/bin/dfdu"
 	cp target/release/dfdu "$(HOME)/.local/bin/dfdu"
 
 # Cargo never removes stale build outputs; this drops them all (release stays).
