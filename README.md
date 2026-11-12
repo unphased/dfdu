@@ -12,6 +12,74 @@
 
 A disk usage browser for the terminal and the desktop. Browse, sort and delete, see what your space is made of (caches, build output, emulators, containers), and get a list of what is safe to remove.
 
+## This fork: peers
+
+This is a fork of [jordond/dfdu](https://github.com/jordond/dfdu), branch `peer`. Two dfdu
+instances, on one machine or two, bind as a pair to check backups by eye: as you walk files on
+the **master**, the **slave** finds each file in its own scan and jumps to it. Design and
+status: [peer/PLAN.md](peer/PLAN.md).
+
+```mermaid
+sequenceDiagram
+  participant M as Mac (master)
+  participant N as NAS (slave)
+  M-->>N: UDP probe (LAN + tailnet)
+  N-->>M: beacon: host, user, ids
+  Note over M: footer: ◆ NAS found · B to connect
+  M->>N: B, Enter: ssh NAS dfdu peer-attach ID
+  loop each move on the master
+    M->>N: nav {path, name, size, mtime, parents, sample hash}
+    N-->>M: verdict ✓ / ✗ / none, best path
+  end
+  M->>N: W: swap roles
+```
+
+**Differences from upstream**
+
+- **Peer mode is on by default** in the interactive browser (`--no-peer` turns it off). Each
+  instance registers a private Unix socket in `~/.local/state/dfdu/peers/` (mode 0700/0600)
+  and answers discovery probes on UDP 47839.
+- **Discovery** by LAN broadcast and by unicast to online tailnet peers (`tailscale status
+  --json`). A beacon carries no paths. It only offers a host to connect to.
+- **Transport is always ssh** between hosts (`ssh -T -o BatchMode=yes HOST ~/.local/bin/dfdu
+  peer-attach ID`), so a compromised LAN can't bind to you. Same host connects to the socket
+  directly. Your own user only.
+- **Matching on the slave:** same size, plus same name at any size, ranked by name, matching
+  parent folders and mtime. Same-size candidates are checked in parallel with a sampled hash
+  (xxh3-128 of the first and last 50 KiB plus the length).
+- **Multiple roots:** `dfdu PATH PATH...` scans and browses several roots in one tree.
+- **Image preview:** JPEG, PNG and ARW files get a kitty-graphics thumbnail beside the selected
+  row (kitty and Ghostty auto-detected; `DFDU_IMAGE_PREVIEW=1` forces it on, `=0` off). The
+  decoder is `~/.vim/jpg-preview`, a path dependency, so the fork builds only with that
+  checkout present.
+- **Builds:** dev and test builds use `line-tables-only` debug info; opt in to full debug info
+  with `CARGO_PROFILE_DEV_DEBUG=true`. `make test` runs the suite, `make install` builds and
+  copies to `~/.local/bin/dfdu`, and `make clean-debug` drops `target/debug`.
+
+**Keys:** `B` connect (or unbind) · Enter binds the selected peer · `W` swap roles (master
+only) · `C` focus the candidate list on the slave, Enter jumps, Esc returns.
+
+**Install** on each machine: `make install` (needs `~/.vim/jpg-preview` beside it). Put
+`~/.local/bin` before any upstream `dfdu` on your PATH. The remote side is always called as
+`~/.local/bin/dfdu` (`--peer-remote-bin` overrides it).
+
+**Try it**
+
+1. **Image preview:** in Ghostty run `dfdu ~/Pictures` and move onto an image. A thumbnail
+   appears after the name and goes away on other rows and views.
+2. **Pair:** on the NAS run `~/.local/bin/dfdu --cross-mounts /pool/a /pool/b` (ZFS datasets
+   are separate mounts). On the Mac run `dfdu ~/some/backed/up/folder`. Within seconds both
+   footers show `◆ <host> found · B to connect`. Press `B` then Enter on the Mac. The Mac shows
+   `master →`, the NAS `slave ←`.
+3. **Walk:** move through files on the Mac. The NAS jumps to the best match, and its Candidates
+   panel marks each with ✓ (sampled hash matches), ✗ (differs) or … (hashing). The Mac footer
+   shows the verdict (`✓ 3 /path`, `none 0`). Browse the NAS freely; the next master move takes
+   it back.
+4. **Swap and leave:** `W` on the master flips roles. `B` unbinds; quitting either side leaves
+   the other running unbound.
+
+## Upstream dfdu
+
 ![Browsing a home directory, the treemap and the cleanup view](https://raw.githubusercontent.com/jordond/dfdu/main/assets/demos/browse.gif)
 
 ## Features
