@@ -564,6 +564,137 @@ mod tests {
         wait_role(&slave, dfdu_peer::Role::Slave);
     }
 
+    #[cfg(unix)]
+    fn cached_host_connect(ids: usize, name: &str) {
+        if std::env::var("DFDU_PANEL_TEST").as_deref() != Ok(name) {
+            use std::os::unix::fs::PermissionsExt;
+            let dir = tempfile::tempdir().unwrap();
+            let ssh = dir.path().join("ssh");
+            std::fs::write(
+                &ssh,
+                r#"#!/usr/bin/env python3
+import os,sys,socket,select,shlex
+command=shlex.split(sys.argv[-1])
+with open(os.environ['SSH_CALLS'], 'a') as f: f.write(command[1]+'\n')
+if command[1] == 'peers':
+    print(open(os.environ['REMOTE_INSTANCES']).read())
+    sys.exit(0)
+assert command[1] == 'peer-attach',command
+s=socket.socket(socket.AF_UNIX)
+s.connect(os.path.join(os.environ['HOME'],'.local/state/dfdu/peers',command[2]+'.sock'))
+while True:
+    ready,_,_=select.select([s,sys.stdin.buffer],[],[])
+    for source in ready:
+        data=s.recv(4096) if source is s else os.read(0,4096)
+        if not data: sys.exit(0)
+        if source is s: os.write(1,data)
+        else: s.sendall(data)
+"#,
+            )
+            .unwrap();
+            std::fs::set_permissions(&ssh, std::fs::Permissions::from_mode(0o700)).unwrap();
+            let tailscale = dir.path().join("tailscale");
+            std::fs::write(&tailscale, "#!/bin/sh\nexit 0\n").unwrap();
+            std::fs::set_permissions(&tailscale, std::fs::Permissions::from_mode(0o700)).unwrap();
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", name, "--nocapture"])
+                .env("DFDU_PANEL_TEST", name)
+                .env("HOME", dir.path())
+                .env("DFDU_SSH", ssh)
+                .env("SSH_CALLS", dir.path().join("calls"))
+                .env("REMOTE_INSTANCES", dir.path().join("instances"))
+                .env("DFDU_TAILSCALE", tailscale)
+                .env("DFDU_DISCOVERY_PORT", "0")
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return;
+        }
+        let master = Arc::new(dfdu_peer::Peer::start(Vec::new()).unwrap());
+        let slave = dfdu_peer::Peer::start(Vec::new()).unwrap();
+        let mut app = app();
+        app.peer = Some(PeerOptions {
+            peer: master.clone(),
+            remote_bin: dfdu_peer::DEFAULT_REMOTE_BIN.into(),
+        });
+        let mut beacon_ids = vec![slave.id().to_owned()];
+        if ids > 1 {
+            beacon_ids.push("other".into());
+        }
+        // The fake SSH listing describes the same instance as the beacon.
+        std::fs::write(std::env::var("REMOTE_INSTANCES").unwrap(), format!(r#"[{{"id":"{}","host":"localhost","pid":1,"roots":[],"started":0,"role":"unbound"}}]"#, slave.id())).unwrap();
+        app.peer_background.complete(
+            master.id(),
+            &master.status(),
+            Ok(vec![dfdu_peer::Beacon {
+                host: "localhost".into(),
+                user: String::new(),
+                ids: beacon_ids,
+                source: "127.0.0.1".parse().unwrap(),
+            }]),
+        );
+        app.key(
+            KeyEvent::new(KeyCode::Char('B'), KeyModifiers::NONE),
+            Instant::now(),
+        );
+        let panel = app.peer_panel.as_ref().unwrap();
+        assert_eq!(panel.selected, 0);
+        assert_eq!(
+            panel.rows.len(),
+            1,
+            "cached host must be visible before refresh completes"
+        );
+        assert!(panel.rows[0].label.contains("localhost"));
+        assert!(panel.loading, "keep the refresh probe");
+        let refresh = results(&app);
+        key(&mut app, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        if ids > 1 {
+            assert!(
+                app.peer_panel.is_some(),
+                "multiple IDs must list before binding"
+            );
+            assert!(!refresh.same_channel(&results(&app)));
+            let rows = results(&app)
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .unwrap()
+                .unwrap();
+            complete(&mut app, Ok(rows));
+            key(&mut app, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        }
+        assert!(app.peer_panel.is_none());
+        wait_role(&master, dfdu_peer::Role::Master);
+        wait_role(&slave, dfdu_peer::Role::Slave);
+        let calls = std::fs::read_to_string(std::env::var("SSH_CALLS").unwrap()).unwrap();
+        assert_eq!(
+            calls,
+            if ids == 1 {
+                "peer-attach\n"
+            } else {
+                "peers\npeer-attach\n"
+            }
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn cached_single_id_binds_immediately_as_master() {
+        cached_host_connect(
+            1,
+            "peer::tests::cached_single_id_binds_immediately_as_master",
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn cached_multiple_ids_list_before_binding() {
+        cached_host_connect(2, "peer::tests::cached_multiple_ids_list_before_binding");
+    }
+
     #[test]
     fn beacon_rows_use_hostname_and_keep_source_fallback() {
         for user in ["", "alice"] {
