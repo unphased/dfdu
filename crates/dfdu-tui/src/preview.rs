@@ -127,7 +127,7 @@ pub struct PreviewState {
 
 impl PreviewState {
     pub fn select(&mut self, request: Option<Request>) -> Action {
-        if self.current != request {
+        if self.current.as_ref().map(|r| &r.path) != request.as_ref().map(|r| &r.path) {
             self.generation = self
                 .generation
                 .checked_add(1)
@@ -142,7 +142,13 @@ impl PreviewState {
                 Action::None
             }
         } else {
-            Action::None
+            let changed = self.current != request;
+            self.current = request;
+            if changed {
+                Action::Render
+            } else {
+                Action::None
+            }
         }
     }
 
@@ -151,7 +157,11 @@ impl PreviewState {
     }
 
     pub fn is_current(&self, generation: u64, request: &Request) -> bool {
-        self.generation == generation && self.current.as_ref() == Some(request)
+        self.generation == generation
+            && self
+                .current
+                .as_ref()
+                .is_some_and(|current| current.path == request.path)
     }
 }
 
@@ -249,7 +259,8 @@ mod tests {
         let resized = Request::new(first.path.clone(), Rect::new(2, 3, 20, 6));
         assert_eq!(state.select(Some(resized.clone())), Action::Render);
         let resized_token = state.generation();
-        assert!(!state.is_current(token, &first));
+        assert!(state.is_current(token, &first));
+        assert_eq!(resized_token, token);
         assert_eq!(state.select(Some(resized)), Action::None);
         assert_eq!(state.generation(), resized_token);
         assert_eq!(state.select(Some(second.clone())), Action::Render);

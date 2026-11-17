@@ -53,11 +53,11 @@ impl Write for Recording {
                 .lock()
                 .unwrap()
                 .push(Written::Graphics(bytes.to_vec()));
-            if bytes.windows(5).any(|w| w == b"_Ga=T") {
+            if bytes.windows(5).any(|w| w == b"_Ga=p") {
                 for event in std::mem::take(&mut self.on_image) {
                     let _ = input.send(event);
                 }
-            } else {
+            } else if bytes.windows(5).any(|w| w == b"_Ga=d") {
                 // Leave even when the triggering action opened an overlay.
                 let _ = input.send(Event::Key(KeyEvent::new(
                     KeyCode::Char('c'),
@@ -173,7 +173,7 @@ fn run_actions(actions: Vec<Event>) {
         .iter()
         .enumerate()
         .filter_map(|(i, event)| match event {
-            Written::Graphics(bytes) if bytes.windows(5).any(|w| w == b"_Ga=T") => Some(i),
+            Written::Graphics(bytes) if bytes.windows(5).any(|w| w == b"_Ga=t") => Some(i),
             _ => None,
         })
         .collect();

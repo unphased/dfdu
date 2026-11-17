@@ -43,20 +43,20 @@ pub(crate) fn request(app: &App, screen: Rect) -> Option<Request> {
     {
         return None;
     }
-    let (x, y) = app.areas.preview_anchor?;
     let (path, is_dir) = dfdu_session::selected_path::selected(&app.session)?;
     let path = path.to_local();
     if is_dir || !is_image(&path) {
         return None;
     }
-    let bounds = clip(app.areas.preview_bounds, screen)?;
-    if x < bounds.x || x >= bounds.right() || y < bounds.y || y >= bounds.bottom() {
-        return None;
-    }
-    let area = Rect::new(x, bounds.y, bounds.right() - x, bounds.height);
-    if area.width < 2 || area.height < 2 {
-        return None;
-    }
+    // Keep the selection alive even when the frame has no room for its placement.
+    let (x, y) = app.areas.preview_anchor.unwrap_or_default();
+    let area = clip(app.areas.preview_bounds, screen)
+        .filter(|bounds| {
+            x >= bounds.x && x < bounds.right() && y >= bounds.y && y < bounds.bottom()
+        })
+        .filter(|_| app.areas.preview_anchor.is_some())
+        .map(|bounds| Rect::new(x, bounds.y, bounds.right() - x, bounds.height))
+        .unwrap_or_default();
     let cell_pixels = ratatui::crossterm::terminal::window_size()
         .ok()
         .and_then(|size| {
@@ -80,7 +80,7 @@ struct Job {
 
 pub(crate) struct Decoded {
     job: Job,
-    stream: Option<Vec<u8>>,
+    upload: Option<jpg_preview::ImageUpload>,
 }
 
 /// One in-flight decode, no queued obsolete work, and one stream awaiting a draw. Dropping never
@@ -92,25 +92,17 @@ pub(crate) struct Preview<W: Write> {
     results: Receiver<Decoded>,
     busy: bool,
     attempted: bool,
-    cached: Option<Vec<u8>>,
-    visible: bool,
+    cached: Option<jpg_preview::ImageUpload>,
+    dimensions: Option<(u32, u32)>,
+    uploaded: bool,
+    placement: Option<Rect>,
 }
 
 impl<W: Write> Preview<W> {
     pub(crate) fn new(out: W, enabled: bool) -> io::Result<Self> {
         if enabled {
             Self::with_decoder(out, |request| {
-                let dimensions = jpg_preview::dimensions(&request.path).ok()?;
-                let area = fit(request.area, request.row, dimensions, request.cell_pixels)?;
-                jpg_preview::render(
-                    &request.path,
-                    usize::from(area.width),
-                    usize::from(area.height),
-                    usize::from(area.x),
-                    usize::from(area.y),
-                    IMAGE_ID,
-                )
-                .ok()
+                jpg_preview::upload_image(&request.path, IMAGE_ID).ok()
             })
         } else {
             Ok(Self {
@@ -121,14 +113,16 @@ impl<W: Write> Preview<W> {
                 busy: false,
                 attempted: false,
                 cached: None,
-                visible: false,
+                dimensions: None,
+                uploaded: false,
+                placement: None,
             })
         }
     }
 
     fn with_decoder(
         out: W,
-        decode: impl Fn(&Request) -> Option<Vec<u8>> + Send + 'static,
+        decode: impl Fn(&Request) -> Option<jpg_preview::ImageUpload> + Send + 'static,
     ) -> io::Result<Self> {
         let (work, jobs) = bounded::<Job>(1);
         let (done, results) = bounded(1);
@@ -136,8 +130,8 @@ impl<W: Write> Preview<W> {
             .name("dfdu-image-preview".into())
             .spawn(move || {
                 while let Ok(job) = jobs.recv() {
-                    let stream = decode(&job.request);
-                    if done.send(Decoded { job, stream }).is_err() {
+                    let upload = decode(&job.request);
+                    if done.send(Decoded { job, upload }).is_err() {
                         break;
                     }
                 }
@@ -150,7 +144,9 @@ impl<W: Write> Preview<W> {
             busy: false,
             attempted: false,
             cached: None,
-            visible: false,
+            dimensions: None,
+            uploaded: false,
+            placement: None,
         })
     }
 
@@ -165,7 +161,7 @@ impl<W: Write> Preview<W> {
             .state
             .is_current(decoded.job.generation, &decoded.job.request)
         {
-            self.cached = decoded.stream;
+            self.cached = decoded.upload;
         }
     }
 
@@ -176,14 +172,41 @@ impl<W: Write> Preview<W> {
         if self.state.generation() != generation {
             self.cached = None;
             self.attempted = false;
-            self.delete_visible()?;
+            self.delete_uploaded()?;
         }
-        if let Some(stream) = self.cached.take() {
-            // A partial write still needs cleanup if writing fails.
-            self.visible = true;
-            self.out.write_all(&stream)?;
+        if let Some(upload) = self.cached.take() {
+            // A partial upload still needs cleanup if writing fails.
+            self.uploaded = true;
+            self.out.write_all(&upload.stream)?;
             self.out.flush()?;
-        } else if !self.busy
+            self.dimensions = Some(upload.dimensions);
+        }
+        let placement = request.as_ref().and_then(|request| {
+            fit(
+                request.area,
+                request.row,
+                self.dimensions?,
+                request.cell_pixels,
+            )
+        });
+        if placement != self.placement {
+            if let Some(area) = placement {
+                let stream = jpg_preview::place_image(
+                    usize::from(area.width),
+                    usize::from(area.height),
+                    usize::from(area.x),
+                    usize::from(area.y),
+                    IMAGE_ID,
+                )
+                .map_err(|err| io::Error::other(err.to_string()))?;
+                self.out.write_all(&stream)?;
+            } else {
+                self.out.write_all(&jpg_preview::hide_image(IMAGE_ID))?;
+            }
+            self.out.flush()?;
+            self.placement = placement;
+        }
+        if !self.busy
             && !self.attempted
             && let Some(request) = request
         {
@@ -217,14 +240,16 @@ impl<W: Write> Preview<W> {
         self.state.select(None);
         self.cached = None;
         self.attempted = false;
-        self.delete_visible()
+        self.delete_uploaded()
     }
 
-    fn delete_visible(&mut self) -> io::Result<()> {
-        if self.visible {
+    fn delete_uploaded(&mut self) -> io::Result<()> {
+        self.dimensions = None;
+        self.placement = None;
+        if self.uploaded {
             self.out.write_all(&jpg_preview::delete_image(IMAGE_ID))?;
             self.out.flush()?;
-            self.visible = false;
+            self.uploaded = false;
         }
         Ok(())
     }

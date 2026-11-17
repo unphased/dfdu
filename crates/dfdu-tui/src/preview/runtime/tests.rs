@@ -37,6 +37,24 @@ impl Output {
     }
 }
 
+fn upload(stream: &[u8]) -> jpg_preview::ImageUpload {
+    jpg_preview::ImageUpload {
+        stream: stream.to_vec(),
+        dimensions: (800, 400),
+    }
+}
+
+fn placement(area: Rect) -> Vec<u8> {
+    jpg_preview::place_image(
+        area.width.into(),
+        area.height.into(),
+        area.x.into(),
+        area.y.into(),
+        IMAGE_ID,
+    )
+    .unwrap()
+}
+
 #[test]
 fn decode_is_async_cached_and_written_only_after_a_frame() {
     let (started, starts) = bounded(1);
@@ -45,7 +63,7 @@ fn decode_is_async_cached_and_written_only_after_a_frame() {
     let mut preview = Preview::with_decoder(out.clone(), move |request| {
         started.send(request.clone()).unwrap();
         finishes.recv().unwrap();
-        Some(b"graphics".to_vec())
+        Some(upload(b"graphics"))
     })
     .unwrap();
     let request = image("a.jpg");
@@ -60,7 +78,10 @@ fn decode_is_async_cached_and_written_only_after_a_frame() {
     preview.complete(decoded);
     assert!(out.take().is_empty(), "completion must wait for draw");
     preview.after_draw(Some(request.clone())).unwrap();
-    assert_eq!(out.take(), b"graphics");
+    let area = fit(request.area, request.row, (800, 400), request.cell_pixels).unwrap();
+    let mut expected = b"graphics".to_vec();
+    expected.extend(placement(area));
+    assert_eq!(out.take(), expected);
     preview.after_draw(Some(request)).unwrap();
     assert!(
         out.take().is_empty(),
@@ -81,7 +102,7 @@ fn stale_work_is_discarded_and_only_the_latest_selection_is_decoded() {
     let mut preview = Preview::with_decoder(out.clone(), move |request| {
         started.send(request.clone()).unwrap();
         finishes.recv().unwrap();
-        Some(request.path.to_string_lossy().as_bytes().to_vec())
+        Some(upload(request.path.to_string_lossy().as_bytes()))
     })
     .unwrap();
     preview.after_draw(Some(image("a.jpg"))).unwrap();
@@ -107,23 +128,151 @@ fn stale_work_is_discarded_and_only_the_latest_selection_is_decoded() {
 }
 
 #[test]
-fn selection_and_geometry_changes_delete_before_replacement_and_drop_cleans_up() {
+fn geometry_changes_only_replace_placement_and_drop_frees_image() {
     let out = Output::default();
-    let mut preview = Preview::with_decoder(out.clone(), |_| Some(b"image".to_vec())).unwrap();
+    let (started, starts) = bounded(8);
+    let mut preview = Preview::with_decoder(out.clone(), move |_| {
+        started.send(()).unwrap();
+        Some(upload(b"image"))
+    })
+    .unwrap();
     let first = image("a.png");
     preview.after_draw(Some(first.clone())).unwrap();
     let decoded = preview.results().recv_timeout(WAIT).unwrap();
     preview.complete(decoded);
     preview.after_draw(Some(first.clone())).unwrap();
-    assert_eq!(out.take(), b"image");
+    assert!(out.take().starts_with(b"image"));
+    starts.recv_timeout(WAIT).unwrap();
+    for area in [Rect::new(20, 4, 10, 5), Rect::new(22, 6, 30, 12)] {
+        let resized = Request::new(first.path.clone(), area);
+        preview.after_draw(Some(resized.clone())).unwrap();
+        assert_eq!(
+            out.take(),
+            placement(fit(area, resized.row, (800, 400), resized.cell_pixels).unwrap())
+        );
+        preview.after_draw(Some(resized)).unwrap();
+        assert!(out.take().is_empty());
+    }
+    let hidden = Request::new(first.path.clone(), Rect::default());
+    preview.after_draw(Some(hidden.clone())).unwrap();
+    assert_eq!(out.take(), jpg_preview::hide_image(IMAGE_ID));
+    preview.after_draw(Some(hidden)).unwrap();
+    assert!(out.take().is_empty());
+    preview.after_draw(Some(first.clone())).unwrap();
+    assert_eq!(
+        out.take(),
+        placement(fit(first.area, first.row, (800, 400), first.cell_pixels).unwrap())
+    );
+    assert!(starts.try_recv().is_err(), "resize must not decode again");
+    drop(preview);
+    assert_eq!(out.take(), jpg_preview::delete_image(IMAGE_ID));
+}
+
+#[test]
+fn resize_during_decode_places_completion_at_latest_geometry() {
+    let (started, starts) = bounded(1);
+    let (finish, finishes) = bounded(1);
+    let out = Output::default();
+    let mut preview = Preview::with_decoder(out.clone(), move |_| {
+        started.send(()).unwrap();
+        finishes.recv().unwrap();
+        Some(upload(b"original"))
+    })
+    .unwrap();
+    let first = image("a.png");
+    preview.after_draw(Some(first.clone())).unwrap();
+    starts.recv_timeout(WAIT).unwrap();
     let resized = Request::new(first.path, Rect::new(20, 4, 10, 5));
     preview.after_draw(Some(resized.clone())).unwrap();
+    finish.send(()).unwrap();
+    preview.complete(preview.results().recv_timeout(WAIT).unwrap());
+    assert!(out.take().is_empty());
+    preview.after_draw(Some(resized.clone())).unwrap();
+    let mut expected = b"original".to_vec();
+    expected.extend(placement(
+        fit(resized.area, resized.row, (800, 400), resized.cell_pixels).unwrap(),
+    ));
+    assert_eq!(out.take(), expected);
+    assert!(!preview.busy);
+    assert!(starts.try_recv().is_err());
+}
+
+#[test]
+fn returning_to_same_path_does_not_accept_obsolete_generation() {
+    let (finish, finishes) = bounded(1);
+    let out = Output::default();
+    let mut preview = Preview::with_decoder(out.clone(), move |_| {
+        finishes.recv().unwrap();
+        Some(upload(b"obsolete"))
+    })
+    .unwrap();
+    preview.after_draw(Some(image("a.jpg"))).unwrap();
+    preview.after_draw(Some(image("b.jpg"))).unwrap();
+    preview.after_draw(Some(image("a.jpg"))).unwrap();
+    finish.send(()).unwrap();
+    preview.complete(preview.results().recv_timeout(WAIT).unwrap());
+    preview.after_draw(Some(image("a.jpg"))).unwrap();
+    assert!(out.take().is_empty());
+    assert!(
+        preview.busy,
+        "fresh decode must replace obsolete generation"
+    );
+    preview.clear().unwrap();
+    finish.send(()).unwrap();
+}
+
+#[test]
+fn selection_change_and_disable_free_uploaded_pixels() {
+    let out = Output::default();
+    let mut preview = Preview::with_decoder(out.clone(), |_| Some(upload(b"upload"))).unwrap();
+    preview.after_draw(Some(image("a.jpg"))).unwrap();
+    preview.complete(preview.results().recv_timeout(WAIT).unwrap());
+    preview.after_draw(Some(image("a.jpg"))).unwrap();
+    out.take();
+    preview.after_draw(Some(image("b.jpg"))).unwrap();
     assert_eq!(out.take(), jpg_preview::delete_image(IMAGE_ID));
-    let decoded = preview.results().recv_timeout(WAIT).unwrap();
-    preview.complete(decoded);
-    preview.after_draw(Some(resized)).unwrap();
-    assert_eq!(out.take(), b"image");
+    preview.complete(preview.results().recv_timeout(WAIT).unwrap());
+    preview.after_draw(Some(image("b.jpg"))).unwrap();
+    out.take();
+    preview.disable().unwrap();
+    assert_eq!(out.take(), jpg_preview::delete_image(IMAGE_ID));
     drop(preview);
+    assert!(out.take().is_empty());
+}
+
+#[test]
+fn partial_upload_is_freed_on_cleanup() {
+    struct Partial {
+        out: Output,
+        writes: usize,
+    }
+    impl Write for Partial {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.writes += 1;
+            match self.writes {
+                1 => self.out.write(&bytes[..1]),
+                2 => Err(io::Error::other("interrupted upload")),
+                _ => self.out.write(bytes),
+            }
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+    let out = Output::default();
+    let mut preview = Preview::with_decoder(
+        Partial {
+            out: out.clone(),
+            writes: 0,
+        },
+        |_| Some(upload(b"upload")),
+    )
+    .unwrap();
+    preview.after_draw(Some(image("a.jpg"))).unwrap();
+    preview.complete(preview.results().recv_timeout(WAIT).unwrap());
+    assert!(preview.after_draw(Some(image("a.jpg"))).is_err());
+    assert_eq!(out.take(), b"u");
+    preview.disable().unwrap();
     assert_eq!(out.take(), jpg_preview::delete_image(IMAGE_ID));
 }
 
@@ -146,12 +295,28 @@ fn real_worker_fits_up_and_encodes_the_fitted_placement() {
     request.row = 21; // last row: only the upward fit exists
     preview.after_draw(Some(request.clone())).unwrap();
     let decoded = preview.results().recv_timeout(WAIT).unwrap();
-    assert!(decoded.stream.is_some());
+    assert!(decoded.upload.is_some());
     preview.complete(decoded);
-    preview.after_draw(Some(request)).unwrap();
+    preview.after_draw(Some(request.clone())).unwrap();
     let stream = String::from_utf8(out.take()).unwrap();
-    assert!(stream.starts_with("\x1b7\x1b[22;41H"));
-    assert!(stream.contains("c=1,r=1,"), "1x1 image stays 1 cell");
+    assert_eq!(stream.matches("_Ga=t").count(), 1);
+    assert!(stream.contains("\x1b7\x1b[22;41H"));
+    assert!(stream.contains("c=1,r=1"), "1x1 image stays 1 cell");
+    std::fs::remove_file(&request.path).unwrap();
+    for x in [35, 30, 45] {
+        request.area.x = x;
+        preview.after_draw(Some(request.clone())).unwrap();
+        let expected = fit(request.area, request.row, (1, 1), request.cell_pixels).unwrap();
+        assert_eq!(
+            out.take(),
+            placement(expected),
+            "real image must only be placed again"
+        );
+        assert!(
+            !preview.busy,
+            "moving must not try to reopen the removed file"
+        );
+    }
 }
 
 #[test]
@@ -193,7 +358,9 @@ fn failed_decode_is_not_retried_on_each_frame() {
     preview.after_draw(Some(image("missing.jpg"))).unwrap();
     let decoded = preview.results().recv_timeout(WAIT).unwrap();
     preview.complete(decoded);
-    preview.after_draw(Some(image("missing.jpg"))).unwrap();
+    let mut resized = image("missing.jpg");
+    resized.area.width += 10;
+    preview.after_draw(Some(resized)).unwrap();
     assert!(!preview.busy);
     assert!(preview.results().try_recv().is_err());
 }
@@ -257,5 +424,6 @@ fn only_local_nonimported_files_in_an_unobscured_files_view_get_a_request() {
     assert!(request(&app, screen).is_none());
     app.session.snap.entries[0].is_dir = false;
     render_buffer(&mut app, now, 20, 6);
-    assert!(request(&app, Rect::new(0, 0, 20, 6)).is_none());
+    let hidden = request(&app, Rect::new(0, 0, 20, 6)).unwrap();
+    assert!(fit(hidden.area, hidden.row, (800, 400), hidden.cell_pixels).is_none());
 }
