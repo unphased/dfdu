@@ -186,6 +186,121 @@ fn c_cycles_the_columns() {
     assert!(!names.contains("items") && !names.contains("Δ"), "{out}");
 }
 
+/// Two entries modified a second apart, plus rows without a filesystem timestamp.
+fn dated(t0: Instant) -> App {
+    let mut app = App::new(Theme::no_color(), t0);
+    let entries = vec![
+        EntryData {
+            mtime: BASELINE + 1,
+            ..test_entry(0, "new.txt", 100)
+        },
+        EntryData {
+            is_dir: true,
+            items: 42,
+            mtime: BASELINE,
+            ..test_entry(1, "old-dir", 200)
+        },
+        test_entry(2, "unknown.txt", 300),
+        EntryData {
+            pseudo: true,
+            mtime: BASELINE,
+            ..test_entry(3, "(shared)", 400)
+        },
+    ];
+    app.refresh(super::snap_with_totals(entries, 1), t0);
+    app
+}
+
+#[test]
+fn sorting_by_modified_shows_seconds_for_files_and_directories() {
+    let t0 = Instant::now();
+    let mut app = dated(t0);
+    app.key(press(KeyCode::Char('M')), t0);
+    app.reorder(t0);
+    let out = render(&mut app, t0, 120, 12);
+    assert!(
+        out.lines().nth(2).unwrap().contains("modified (UTC)"),
+        "{out}"
+    );
+    let file = out.lines().find(|l| l.contains("new.txt")).unwrap();
+    let dir = out.lines().find(|l| l.contains("old-dir/")).unwrap();
+    assert!(file.contains("2026-10-18 12:00:01"), "{out}");
+    assert!(dir.contains("2026-10-18 12:00:00"), "{out}");
+    assert!(
+        out.find("new.txt").unwrap() < out.find("old-dir/").unwrap(),
+        "{out}"
+    );
+    for name in ["unknown.txt", "(shared)"] {
+        let row = out.lines().find(|l| l.contains(name)).unwrap();
+        assert!(!row.contains("2026-") && !row.contains("1970-"), "{row}");
+    }
+    app.key(press(KeyCode::Char('M')), t0);
+    app.reorder(t0);
+    let out = render(&mut app, t0, 120, 12);
+    assert!(
+        out.find("old-dir/").unwrap() < out.find("new.txt").unwrap(),
+        "{out}"
+    );
+    assert!(out.contains("2026-10-18 12:00:01"), "{out}");
+}
+
+#[test]
+fn the_sort_column_overrides_c_without_changing_its_preference() {
+    let t0 = Instant::now();
+    let mut app = dated(t0);
+    app.key(press(KeyCode::Char('c')), t0);
+    app.key(press(KeyCode::Char('c')), t0);
+    let preference = app.columns;
+    for (key, title) in [('M', "modified (UTC)"), ('C', "items")] {
+        app.key(press(KeyCode::Char(key)), t0);
+        let out = render(&mut app, t0, 120, 12);
+        assert!(out.lines().nth(2).unwrap().contains(title), "{out}");
+        assert_eq!(app.columns, preference);
+        app.key(press(KeyCode::Char('s')), t0);
+        let out = render(&mut app, t0, 120, 12);
+        let header = out.lines().nth(2).unwrap();
+        assert!(
+            !header.contains("modified") && !header.contains("items"),
+            "{out}"
+        );
+    }
+    app.key(press(KeyCode::Char('M')), t0);
+    app.key(press(KeyCode::Char('c')), t0);
+    let out = render(&mut app, t0, 120, 12);
+    assert!(out.contains("2026-10-18 12:00:01"), "{out}");
+}
+
+#[test]
+fn the_active_sort_column_survives_narrow_windows() {
+    let t0 = Instant::now();
+    for width in [48, 64, 80, 120] {
+        for (key, title) in [('M', "modified (UTC)"), ('C', "items")] {
+            let mut app = dated(t0);
+            app.key(press(KeyCode::Char(key)), t0);
+            let out = render(&mut app, t0, width, 12);
+            assert!(
+                out.lines().nth(2).unwrap().contains(title),
+                "width {width}:\n{out}"
+            );
+            if key == 'M' {
+                assert!(out.contains("2026-10-18 12:00:01"), "width {width}:\n{out}");
+            }
+        }
+    }
+}
+
+#[test]
+fn leaving_modified_sort_restores_the_requested_date_column() {
+    let t0 = Instant::now();
+    let mut app = dated(t0);
+    app.key(press(KeyCode::Char('c')), t0);
+    app.key(press(KeyCode::Char('M')), t0);
+    app.key(press(KeyCode::Char('s')), t0);
+    let out = render(&mut app, t0, 120, 12);
+    assert!(out.contains("2026-10-18"), "{out}");
+    assert!(!out.contains("12:00:01"), "{out}");
+}
+
 /// The cursor fills its row up to the scrollbar, and dim text on it takes the normal text
 /// colour, in every built-in theme at every colour level.
 #[test]
