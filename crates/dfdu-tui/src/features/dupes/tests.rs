@@ -105,6 +105,12 @@ fn duplicates_are_found_marked_and_shown() {
     assert!(out.contains("2 copies of 1.0 MiB"), "{out}");
 }
 
+/// A date `days` and a half before now, so the age a row shows for it stays the same as time
+/// passes.
+fn days_ago(days: i64) -> i64 {
+    dfdu_tree::now_secs() - days * 86_400 - 43_200
+}
+
 /// A comparison done with `groups` found: files below `/r` with their dates, each still in the
 /// tree.
 pub(super) fn found_in(app: &mut App, groups: &[&[(&str, i64)]]) {
@@ -162,12 +168,12 @@ fn rows_show_the_path_below_the_shared_directory_and_align_the_dates() {
         &mut app,
         &[
             &[
-                (&format!("{trip}/IMG_0001.jpg"), 1_760_000_000),
-                (&long, 1_761_000_000),
+                (&format!("{trip}/IMG_0001.jpg"), days_ago(400)),
+                (&long, days_ago(390)),
             ],
             &[
-                ("/r/a.bin", 1_700_000_000),
-                ("/r/backup/a.bin", 1_700_000_000),
+                ("/r/a.bin", days_ago(800)),
+                ("/r/backup/a.bin", days_ago(800)),
             ],
         ],
     );
@@ -218,9 +224,9 @@ fn the_keep_rule_picks_the_copy_marking_leaves() {
     found_in(
         &mut app,
         &[&[
-            ("/r/b/new.bin", 1_760_000_000),
-            ("/r/a/archive/old.bin", 1_700_000_000),
-            ("/r/c.bin", 1_730_000_000),
+            ("/r/b/new.bin", days_ago(400)),
+            ("/r/a/archive/old.bin", days_ago(800)),
+            ("/r/c.bin", days_ago(600)),
         ]],
     );
     let kept_after_a = |app: &mut App| {

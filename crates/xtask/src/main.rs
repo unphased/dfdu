@@ -253,15 +253,15 @@ fn lint() -> anyhow::Result<()> {
     ])
 }
 
-/// The fuzz crate is not a workspace member, so its lockfile only goes stale where nothing
-/// builds it; CI checks it with `--locked`.
+/// The fuzz crate is not a workspace member, and only the nightly fuzz run builds it. No
+/// `--locked`, as in CI: dependency bumps refresh only the root `Cargo.lock`, and the weekly lock
+/// file maintenance refreshes `fuzz/Cargo.lock`.
 fn fuzz_build() -> anyhow::Result<()> {
     run(&mut cargo([
         "check",
         "--manifest-path",
         "fuzz/Cargo.toml",
         "--bins",
-        "--locked",
     ]))
 }
 

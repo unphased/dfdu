@@ -482,18 +482,32 @@ impl Drop for Mounted {
         }
         if !clean {
             self.abort();
-            let _ = unmount(&self.at, UnmountFlags::DETACH);
+            if unmount(&self.at, UnmountFlags::DETACH).is_err() {
+                // Not root. fuser leaves an aborted mount in place, so detach it through
+                // fusermount.
+                for bin in ["fusermount3", "fusermount"] {
+                    let done = std::process::Command::new(bin)
+                        .arg("-uz")
+                        .arg(&self.at)
+                        .stdout(std::process::Stdio::null())
+                        .stderr(std::process::Stdio::null())
+                        .status();
+                    if done.is_ok_and(|s| s.success()) {
+                        break;
+                    }
+                }
+            }
         }
         if let Some(s) = self.session.take() {
             // The session thread ends when the connection does; a lazily detached mount that is
-            // still in use keeps it open, and then the thread is left behind.
-            let deadline = Instant::now() + Duration::from_secs(2);
-            while !s.guard.is_finished() && Instant::now() < deadline {
-                thread::sleep(Duration::from_millis(5));
-            }
-            if s.guard.is_finished() {
-                let _ = s.join();
-            }
+            // still in use keeps it open. Joining (or dropping) the session waits for that, so it
+            // happens on its own thread, which is left behind if the session does not end.
+            let (done, ended) = channel();
+            thread::spawn(move || {
+                let _ = s.umount_and_join();
+                let _ = done.send(());
+            });
+            let _ = ended.recv_timeout(Duration::from_secs(2));
         }
     }
 }

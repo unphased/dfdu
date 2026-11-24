@@ -6,11 +6,13 @@ version = 2
 yanked = "deny"
 # Unmaintained crates pulled in by eframe's Linux backends, with no release to move to yet:
 # winit's sctk-adwaita (ttf-parser) and accesskit_unix (zbus 5). Drop once eframe moves on.
+# chrono comes from trash, which has no release without it yet. Drop once trash moves on.
 ignore = [
     { id = "RUSTSEC-2026-0192", reason = "ttf-parser via eframe > winit > sctk-adwaita" },
     { id = "RUSTSEC-2026-0370", reason = "zvariant via eframe > accesskit_unix > zbus 5" },
     { id = "RUSTSEC-2026-0371", reason = "zbus_names via eframe > accesskit_unix > zbus 5" },
     { id = "RUSTSEC-2026-0372", reason = "zvariant_derive via eframe > accesskit_unix > zbus 5" },
+    { id = "RUSTSEC-2026-0543", reason = "chrono via trash" },
 ]
 
 [licenses]

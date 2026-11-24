@@ -8,7 +8,7 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use fuser::{
     BsdFileFlags, Errno, FileAttr, FileHandle, Filesystem, FopenFlags, Generation, INodeNo,
-    LockOwner, OpenFlags, RenameFlags, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory,
+    LockOwner, OpenFlags, Owner, RenameFlags, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory,
     ReplyEmpty, ReplyEntry, ReplyOpen, ReplyStatfs, ReplyWrite, Request, TimeOrNow, WriteFlags,
 };
 
@@ -71,11 +71,6 @@ fn make(
     Ok(n)
 }
 
-/// The user and group a request is made by.
-fn owner(req: &Request) -> (u32, u32) {
-    (req.uid(), req.gid())
-}
-
 /// What symlink `n` points to.
 fn link_target(t: &Tree, n: usize) -> Result<&[u8], FsError> {
     match t.get(n).map(|i| &i.kind) {
@@ -130,6 +125,7 @@ impl Filesystem for DemoFs {
         _chgtime: Option<std::time::SystemTime>,
         _bkuptime: Option<std::time::SystemTime>,
         _flags: Option<BsdFileFlags>,
+        _kill_suid_gid: bool,
         reply: ReplyAttr,
     ) {
         let now = self.time();
@@ -155,11 +151,12 @@ impl Filesystem for DemoFs {
 
     fn mkdir(
         &self,
-        req: &Request,
+        _req: &Request,
         parent: INodeNo,
         name: &OsStr,
         mode: u32,
         umask: u32,
+        owner: Owner,
         reply: ReplyEntry,
     ) {
         let now = self.time();
@@ -172,7 +169,7 @@ impl Filesystem for DemoFs {
             Kind::dir(),
             now,
             mode,
-            owner(req),
+            (owner.uid, owner.gid),
         ) {
             Ok(n) => entry(&t, n, reply),
             Err(e) => reply.error(errno(e)),
@@ -197,10 +194,11 @@ impl Filesystem for DemoFs {
 
     fn symlink(
         &self,
-        req: &Request,
+        _req: &Request,
         parent: INodeNo,
         link_name: &OsStr,
         target: &Path,
+        owner: Owner,
         reply: ReplyEntry,
     ) {
         let now = self.time();
@@ -213,7 +211,7 @@ impl Filesystem for DemoFs {
             kind,
             now,
             0o777,
-            owner(req),
+            (owner.uid, owner.gid),
         ) {
             Ok(n) => entry(&t, n, reply),
             Err(e) => reply.error(errno(e)),
@@ -228,8 +226,14 @@ impl Filesystem for DemoFs {
         newparent: INodeNo,
         newname: &OsStr,
         flags: RenameFlags,
+        _owner: Option<Owner>,
         reply: ReplyEmpty,
     ) {
+        let known = RenameFlags::RENAME_NOREPLACE | RenameFlags::RENAME_EXCHANGE;
+        if !known.contains(flags) {
+            reply.error(Errno::EINVAL);
+            return;
+        }
         let now = self.time();
         let r = self.tree().rename(
             node(parent),
@@ -261,7 +265,14 @@ impl Filesystem for DemoFs {
         }
     }
 
-    fn open(&self, _req: &Request, ino: INodeNo, _flags: OpenFlags, reply: ReplyOpen) {
+    fn open(
+        &self,
+        _req: &Request,
+        ino: INodeNo,
+        _flags: OpenFlags,
+        _kill_suid_gid: bool,
+        reply: ReplyOpen,
+    ) {
         let t = self.tree();
         match stat(&t, node(ino)) {
             Ok(_) => reply.opened(FileHandle(0), FopenFlags::empty()),
@@ -386,20 +397,30 @@ impl Filesystem for DemoFs {
 
     fn create(
         &self,
-        req: &Request,
+        _req: &Request,
         parent: INodeNo,
         name: &OsStr,
         mode: u32,
         umask: u32,
         _flags: i32,
+        _kill_suid_gid: bool,
+        owner: Owner,
         reply: ReplyCreate,
     ) {
         let now = self.time();
         let mut t = self.tree();
         let (name, mode) = (name.as_bytes(), mode & !umask & 0o7777);
         let kind = Kind::stored(vec![]);
-        let created =
-            make(&mut t, node(parent), name, kind, now, mode, owner(req)).and_then(|n| attr(&t, n));
+        let created = make(
+            &mut t,
+            node(parent),
+            name,
+            kind,
+            now,
+            mode,
+            (owner.uid, owner.gid),
+        )
+        .and_then(|n| attr(&t, n));
         match created {
             Ok(a) => reply.created(&TTL, &a, Generation(0), FileHandle(0), FopenFlags::empty()),
             Err(e) => reply.error(errno(e)),

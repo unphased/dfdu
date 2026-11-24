@@ -43,13 +43,13 @@ dfdu-update = { path = "crates/dfdu-update", version = "0.6.0", default-features
 crossbeam-channel = "0.5.17"
 crossbeam-deque = "0.8.8"
 parking_lot = "0.13.0"
-clap = { version = "4.6.7", features = ["derive"] }
-clap_mangen = "0.3.3"
-clap_complete = "4.6.11"
+clap = { version = "4.6.9", features = ["derive"] }
+clap_mangen = "0.3.4"
+clap_complete = "4.6.12"
 anyhow = "1.0.104"
 os_str_bytes = { version = "7.2.1", features = ["conversions"] }
 dunce = "1.0.5"
-trash = "5.3.0"
+trash = "5.4.0"
 etcetera = "0.11.0"
 crc32c = "0.6.9"
 twox-hash = { version = "2.1.5", default-features = false, features = ["std", "xxhash3_128"] }
@@ -57,14 +57,14 @@ sha2 = "0.11.1"
 # Not `rustls`, which bundles webpki-roots: certificates come from the platform verifier only.
 # `_ring` is how ureq spells "rustls with ring" without the bundled roots; it is not public API,
 # so check it still exists when upgrading ureq.
-ureq = { version = "3.5.1", default-features = false, features = ["rustls-no-provider", "_ring", "platform-verifier"] }
+ureq = { version = "3.5.2", default-features = false, features = ["rustls-no-provider", "_ring", "platform-verifier"] }
 lzma-rust2 = { version = "0.25.0", default-features = false, features = ["std", "xz"] }
 tar = { version = "0.4.46", default-features = false }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.154", features = ["raw_value"] }
 hex = "0.4.3"
 getrandom = "0.4.3"
-zeroize = "1.9.1"
+zeroize = "1.9.2"
 # Remembered ssh passwords: Keychain on macOS, Credential Manager on Windows, the Secret Service
 # elsewhere.
 keyring = "4.2.0"
@@ -73,14 +73,14 @@ gix-index = "0.58.0"
 gix-discover = "0.57.1"
 gix-hash = { version = "0.28.1", features = ["sha1"] }
 gix-path = "0.14.1"
-rusqlite = { version = "0.41.1", features = ["bundled"] }
+rusqlite = { version = "0.43.0", features = ["bundled"] }
 ruzstd = "0.9.1"
-fixedbitset = "0.5.7"
+fixedbitset = "0.5.9"
 tempfile = "3.27.0"
 rustix = { version = "1.1.6", features = ["fs", "process"] }
 libc = "0.2.191"
-sysinfo = { version = "0.40.1", default-features = false, features = ["disk"] }
-rand = { version = "0.10.3", default-features = false, features = ["chacha"] }
+sysinfo = { version = "0.40.4", default-features = false, features = ["disk"] }
+rand = { version = "0.10.4", default-features = false, features = ["chacha"] }
 ratatui = { version = "0.30.2", default-features = false, features = ["crossterm", "layout-cache"] }
 unicode-width = "0.2.3"
 tachyonfx = { version = "0.25.2", default-features = false, features = ["std", "std-duration"] }
@@ -88,8 +88,8 @@ nucleo-matcher = "0.3.1"
 terminal-colorsaurus = "1.0.3"
 insta = "1.49.0"
 proptest = { version = "1.12.0", default-features = false, features = ["std"] }
-toml = { version = "1.2.1", default-features = false, features = ["std", "serde", "parse"] }
-loom = "0.7.2"
+toml = { version = "1.2.2", default-features = false, features = ["std", "serde", "parse"] }
+loom = "0.7.3"
 windows-sys = { version = "0.61.2", features = [
     "Wdk_Foundation",
     "Wdk_Storage_FileSystem",
@@ -99,7 +99,7 @@ windows-sys = { version = "0.61.2", features = [
     "Win32_System_IO",
     "Win32_System_Ioctl",
 ] }
-fuser = { version = "0.18.0", default-features = false }
+fuser = { version = "0.19.0", default-features = false }
 # The macOS privileged helper (crates/dfdu-sys/src/macos/helper): `SMAppService` to register the
 # launchd daemon, blocks for the XPC handlers, and Authorization Services for the per-scan
 # administrator prompt (Core Foundation for the right's definition). The versions eframe and rfd

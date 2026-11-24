@@ -152,8 +152,7 @@ fn bump(version: &str, commit: bool) -> anyhow::Result<()> {
     fs::write("Cargo.toml", set_version(&manifest, &old, version))?;
     eprintln!("version {old} -> {version}");
     run(&mut cargo(["update", "--workspace"]))?;
-    // The fuzz targets are a workspace of their own, with their own lock file (CI builds them
-    // --locked).
+    // The fuzz targets are a workspace of their own, with their own lock file.
     run(&mut cargo([
         "update",
         "--workspace",
