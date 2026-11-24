@@ -1,9 +1,9 @@
 //! The columns of the list and how wide each is. [`layout`] decides, for the width of the list
 //! and the columns the rows on screen have something to show in ([`ColSet`]), which columns are
 //! drawn and how wide. The name always comes last and takes what is left, at least [`NAME_MIN`]
-//! cells while the other columns can make room: the optional columns go first, and the bar
-//! shrinks step by step. A row's cells are aligned in their columns with [`right`] and [`left`],
-//! and the cursor row is filled with [`cursor`].
+//! cells while the other columns can make room: optional columns not being sorted go first,
+//! and the bar shrinks step by step. A row's cells are aligned with [`right`] and [`left`], and
+//! the cursor row is filled with [`cursor`].
 
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
@@ -82,6 +82,8 @@ const DELTA: u16 = 10;
 pub struct ColSet {
     pub items: bool,
     pub mtime: bool,
+    /// The optional column required by the active sort, regardless of `c`.
+    pub sorted: Option<Col>,
     /// Some row changed noticeably since the last recorded scan.
     pub delta: bool,
     /// Some row has data also used outside the scan.
@@ -165,7 +167,7 @@ enum Goal {
 
 /// The columns drawn on a list `width` cells wide, left to right, with the cells each takes
 /// (not counting the gap before it, [`Col::gap`]). The gaps and widths add up to `width`, but
-/// for a list too narrow even for the size and share.
+/// for a list too narrow even for the size, share and active sort column.
 pub fn layout(width: u16, present: ColSet) -> Vec<(Col, u16)> {
     let mut cols: Vec<(Col, u16)> = [
         (Col::Gutter, GUTTER),
@@ -173,15 +175,22 @@ pub fn layout(width: u16, present: ColSet) -> Vec<(Col, u16)> {
         (Col::Bar, BAR_STEPS[0]),
         (Col::Share, SHARE),
         (Col::Items, ITEMS),
-        (Col::Mtime, MTIME),
+        (
+            Col::Mtime,
+            if present.sorted == Some(Col::Mtime) {
+                19
+            } else {
+                MTIME
+            },
+        ),
         (Col::Delta, DELTA),
         (Col::Shared, 1),
         (Col::Category, present.category.min(CATEGORY_MAX)),
     ]
     .into_iter()
     .filter(|&(c, w)| match c {
-        Col::Items => present.items,
-        Col::Mtime => present.mtime,
+        Col::Items => present.items || present.sorted == Some(Col::Items),
+        Col::Mtime => present.mtime || present.sorted == Some(Col::Mtime),
         Col::Delta => present.delta,
         Col::Shared => present.shared,
         Col::Category => w > 0,
@@ -198,7 +207,7 @@ pub fn layout(width: u16, present: ColSet) -> Vec<(Col, u16)> {
             continue;
         }
         match step {
-            Step::Drop(c) => cols.retain(|&(col, _)| col != c),
+            Step::Drop(c) => cols.retain(|&(col, _)| col != c || Some(col) == present.sorted),
             Step::Bar(w) => {
                 for col in &mut cols {
                     if col.0 == Col::Bar {
@@ -208,6 +217,10 @@ pub fn layout(width: u16, present: ColSet) -> Vec<(Col, u16)> {
                 cols.retain(|&(c, w)| c != Col::Bar || w > 0);
             }
         }
+    }
+    // The value being sorted matters more than the share when space is tight.
+    if present.sorted.is_some() && name_width(width, &cols) < NAME_MIN {
+        cols.retain(|&(c, _)| c != Col::Share);
     }
     let name = name_width(width, &cols);
     cols.push((Col::Name, name));
@@ -278,6 +291,7 @@ mod tests {
         ColSet {
             items: true,
             mtime: false,
+            sorted: None,
             delta: true,
             shared: true,
             category,
@@ -377,6 +391,33 @@ mod tests {
         assert_eq!(
             shown(80, mtime),
             "Gutter2 Size10 Bar12 Share6 Mtime10 Shared1 Name30"
+        );
+    }
+
+    #[test]
+    fn the_active_sort_column_takes_priority_over_bars_and_share() {
+        for sorted in [Col::Items, Col::Mtime] {
+            for width in 40..160 {
+                let present = ColSet {
+                    sorted: Some(sorted),
+                    ..ColSet::default()
+                };
+                let cols = layout(width, present);
+                assert!(cols.iter().any(|&(c, _)| c == sorted), "{width}: {cols:?}");
+                let used: u16 = gaps(&cols).map(|(gap, _, w)| gap + w).sum();
+                assert_eq!(used, width, "{cols:?}");
+                assert!(cols.last().unwrap().1 > 0, "{cols:?}");
+            }
+        }
+        assert_eq!(
+            shown(
+                48,
+                ColSet {
+                    sorted: Some(Col::Mtime),
+                    ..ColSet::default()
+                }
+            ),
+            "Gutter2 Size10 Mtime19 Name13"
         );
     }
 

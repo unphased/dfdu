@@ -33,6 +33,10 @@ Keys follow ncdu. Press `?` in the app for the full list.
 
 In Files, `/` filters names fuzzily. With a filter kept, `n` and `N` jump to the next and previous visible name containing the whole filter text as a case-insensitive substring, wrapping at the ends. This also works in tree mode. The status shows `exact 3/7`, or `no exact match for "foo"`. With no filter, both keys do nothing. `A` sorts by name.
 
+Sorting automatically shows the relevant values: `C` keeps the item-count column visible, and `M` shows each entry's modified timestamp through seconds, labelled UTC. Press the same sort key again to reverse the order. A folder's modified timestamp is its own filesystem timestamp, not the newest timestamp of its contents. Entries without a timestamp have a blank cell.
+
+`c` cycles the optional columns: items and size changes, then those plus modified dates, then neither. The active sort column stays visible regardless of this choice. Switching sorts restores your column choice. In narrow windows, bars and other optional columns give way before the active sort column.
+
 Unreadable entries are marked `!` with the reason. Press `!` to list them all.
 
 ## Peer mode (Unix)

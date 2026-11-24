@@ -21,6 +21,7 @@ use crate::format::{bar, count, human, percent, ratio, spinner};
 use crate::model::growth::{self, RowNote};
 use crate::model::snapshot::{EntryData, Mark};
 use crate::state::motion;
+use crate::state::order::SortKey;
 use crate::theme::Theme;
 
 /// Draws the column header on `head` and the rows on `area`.
@@ -182,6 +183,11 @@ fn present(app: &App, visible: &[usize], changes: &[Option<RowNote>]) -> ColSet 
     ColSet {
         items: app.columns.items(),
         mtime: app.columns.mtime(),
+        sorted: match app.session.sort.key {
+            SortKey::Items => Some(Col::Items),
+            SortKey::Mtime => Some(Col::Mtime),
+            SortKey::Size | SortKey::Name => None,
+        },
         delta: app.columns.delta() && changes.iter().any(Option::is_some),
         shared: entries().any(|e| e.shared_out > 0),
         category: u16::try_from(category)
@@ -197,6 +203,7 @@ fn header(app: &App, cols: &[(Col, u16)]) -> Line<'static> {
         spans.push(blank(gap));
         let title = match c {
             Col::Delta => growth::column_title(app),
+            Col::Mtime if app.session.sort.key == SortKey::Mtime => "modified (UTC)".into(),
             c => c.title().to_owned(),
         };
         let title = if Span::raw(&title).width() > usize::from(w) {
@@ -291,8 +298,21 @@ fn entry_line(app: &App, row: &Row<'_>, cols: &[(Col, u16)]) -> Line<'static> {
             }
             Col::Items => spans.push(right(count(e.items), w, t.fg_dim)),
             Col::Mtime => {
-                let day = (e.mtime > 0 && !e.pseudo).then(|| dfdu_tree::day(e.mtime));
-                spans.push(left(day.unwrap_or_default(), w, t.fg_dim));
+                let time = (e.mtime > 0 && !e.pseudo).then(|| {
+                    let day = dfdu_tree::day(e.mtime);
+                    if app.session.sort.key == SortKey::Mtime {
+                        let rem = e.mtime.rem_euclid(86_400);
+                        format!(
+                            "{day} {:02}:{:02}:{:02}",
+                            rem / 3600,
+                            rem % 3600 / 60,
+                            rem % 60
+                        )
+                    } else {
+                        day
+                    }
+                });
+                spans.push(left(time.unwrap_or_default(), w, t.fg_dim));
             }
             Col::Delta => spans.push(match row.change {
                 Some(n) if n.grew() => right(n.short(), w, t.status_warn),

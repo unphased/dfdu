@@ -284,9 +284,24 @@ fn the_active_sort_column_survives_narrow_windows() {
             );
             if key == 'M' {
                 assert!(out.contains("2026-10-18 12:00:01"), "width {width}:\n{out}");
+            } else {
+                let dir = out.lines().find(|l| l.contains("old-dir/")).unwrap();
+                assert!(dir.contains("42"), "width {width}:\n{out}");
             }
         }
     }
+}
+
+#[test]
+fn sort_values_are_also_visible_in_tree_mode() {
+    let t0 = Instant::now();
+    let mut app = dated(t0);
+    app.key(press(KeyCode::Char('T')), t0);
+    app.key(press(KeyCode::Char('M')), t0);
+    app.reorder(t0);
+    let out = render(&mut app, t0, 80, 12);
+    assert!(out.contains("2026-10-18 12:00:01"), "{out}");
+    assert!(out.contains("2026-10-18 12:00:00"), "{out}");
 }
 
 #[test]
